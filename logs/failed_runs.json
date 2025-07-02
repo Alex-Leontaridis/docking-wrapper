@@ -1,0 +1,4 @@
+{
+  "gnina": "GNINA binary not found. Please install GNINA or build it from source.",
+  "diffdock": "Command '['python3', 'DiffDock/inference.py', '--protein_ligand_csv', '/var/folders/23/5669rgw56fjdmfffc8rzw9_00000gn/T/tmprnifkq1o.csv', '--out_dir', './diffdock_output', '--inference_steps', '20', '--samples_per_complex', '10', '--batch_size', '10']' returned non-zero exit status 1."
+}

@@ -1,0 +1,86 @@
+2025-07-02 23:56:53,997 - INFO - Starting results parsing...
+2025-07-02 23:56:53,997 - INFO - Parsed 9 Vina poses from vina_output/vina_out.pdbqt
+2025-07-02 23:56:53,998 - INFO - Parsed 9 Vina poses from vina_output/vina_out.pdbqt
+2025-07-02 23:56:53,998 - ERROR - Failed to parse GNINA results: No GNINA output files found
+2025-07-02 23:56:53,998 - ERROR - Failed to parse DiffDock results: No DiffDock SDF files found
+2025-07-02 23:57:06,261 - INFO - Starting results parsing...
+2025-07-02 23:57:06,262 - INFO - Parsed 9 Vina poses from vina_output/vina_out.pdbqt
+2025-07-02 23:57:06,262 - INFO - Parsed 9 Vina poses from vina_output/vina_out.pdbqt
+2025-07-02 23:57:06,262 - ERROR - Failed to parse GNINA results: No GNINA output files found
+2025-07-02 23:57:06,262 - ERROR - Failed to parse DiffDock results: No DiffDock SDF files found
+2025-07-02 23:57:06,268 - INFO - Generated summary with 18 total poses
+2025-07-02 23:57:06,269 - INFO - Results saved to: summary.csv
+2025-07-02 23:57:06,270 - INFO - Failed runs logged to: failed_parsing.json
+2025-07-02 23:57:27,476 - INFO - Starting results parsing...
+2025-07-02 23:57:27,477 - INFO - Parsed 9 Vina poses from vina_output/vina_out.pdbqt
+2025-07-02 23:57:27,478 - ERROR - Failed to parse GNINA results: No GNINA output files found
+2025-07-02 23:57:27,478 - ERROR - Failed to parse DiffDock results: No DiffDock SDF files found
+2025-07-02 23:57:27,482 - INFO - Generated summary with 9 total poses
+2025-07-02 23:57:27,484 - INFO - Results saved to: summary.csv
+2025-07-02 23:57:27,484 - INFO - Failed runs logged to: failed_parsing.json
+2025-07-02 23:58:15,922 - INFO - Starting results parsing...
+2025-07-02 23:58:15,923 - INFO - Parsed 9 Vina poses from vina_output/vina_out.pdbqt
+2025-07-02 23:58:15,923 - ERROR - Failed to parse GNINA results: No GNINA output files found
+2025-07-02 23:58:15,923 - ERROR - Failed to parse DiffDock results: No DiffDock SDF files found
+2025-07-02 23:58:15,923 - INFO - Calculating RMSD against reference: testing/aspirin.sdf
+2025-07-02 23:58:15,939 - INFO - Generated summary with 9 total poses
+2025-07-02 23:58:15,941 - INFO - Results saved to: summary_with_reference.csv
+2025-07-02 23:58:15,942 - INFO - Failed runs logged to: failed_parsing.json
+2025-07-03 00:02:41,241 - INFO - Starting results parsing...
+2025-07-03 00:02:41,242 - INFO - Parsed 9 Vina poses from vina_output/vina_out.pdbqt
+2025-07-03 00:02:41,242 - ERROR - Failed to parse GNINA results: No GNINA output files found
+2025-07-03 00:02:41,242 - ERROR - Failed to parse DiffDock results: No DiffDock SDF files found
+2025-07-03 00:02:41,246 - INFO - Generated summary with 9 total poses
+2025-07-03 00:02:41,247 - INFO - Results saved to: summary.csv
+2025-07-03 00:02:41,248 - INFO - Failed runs logged to: failed_parsing.json
+2025-07-03 00:02:55,949 - INFO - Starting results parsing...
+2025-07-03 00:02:55,951 - INFO - Parsed 9 Vina poses from vina_output/vina_out.pdbqt
+2025-07-03 00:02:55,951 - ERROR - Failed to parse GNINA results: No GNINA output files found
+2025-07-03 00:02:55,951 - ERROR - Failed to parse DiffDock results: No DiffDock SDF files found
+2025-07-03 00:02:55,951 - INFO - Calculating RMSD against reference: testing/aspirin.sdf
+2025-07-03 00:02:55,966 - INFO - Generated summary with 9 total poses
+2025-07-03 00:02:55,968 - INFO - Results saved to: test_rmsd.csv
+2025-07-03 00:02:55,968 - INFO - Failed runs logged to: failed_parsing.json
+2025-07-03 00:03:34,296 - INFO - Starting results parsing...
+2025-07-03 00:03:34,297 - WARNING - Vina output directory not found: test_gnina_output/vina_output
+2025-07-03 00:03:34,298 - WARNING - GNINA output directory not found: test_gnina_output/gnina_output
+2025-07-03 00:03:34,298 - WARNING - DiffDock output directory not found: test_gnina_output/diffdock_output
+2025-07-03 00:03:34,298 - WARNING - No docking results found!
+2025-07-03 00:03:34,304 - INFO - Results saved to: test_gnina.csv
+2025-07-03 00:03:41,548 - INFO - Starting results parsing...
+2025-07-03 00:03:41,548 - WARNING - Vina output directory not found: test_gnina_output/vina_output
+2025-07-03 00:03:41,548 - INFO - Parsed 0 GNINA poses
+2025-07-03 00:03:41,548 - WARNING - DiffDock output directory not found: test_gnina_output/diffdock_output
+2025-07-03 00:03:41,548 - WARNING - No docking results found!
+2025-07-03 00:03:41,551 - INFO - Results saved to: test_gnina.csv
+2025-07-03 00:04:06,570 - INFO - Starting results parsing...
+2025-07-03 00:04:06,571 - WARNING - Vina output directory not found: test_gnina_output/vina_output
+2025-07-03 00:04:06,571 - INFO - Parsed 4 GNINA poses
+2025-07-03 00:04:06,571 - WARNING - DiffDock output directory not found: test_gnina_output/diffdock_output
+2025-07-03 00:04:06,577 - INFO - Generated summary with 4 total poses
+2025-07-03 00:04:06,579 - INFO - Results saved to: test_gnina.csv
+2025-07-03 00:04:21,227 - INFO - Starting results parsing...
+2025-07-03 00:04:21,227 - WARNING - Vina output directory not found: test_diffdock_output/vina_output
+2025-07-03 00:04:21,227 - WARNING - GNINA output directory not found: test_diffdock_output/gnina_output
+2025-07-03 00:04:21,239 - INFO - Parsed 0 DiffDock poses
+2025-07-03 00:04:21,239 - WARNING - No docking results found!
+2025-07-03 00:04:21,242 - INFO - Results saved to: test_diffdock.csv
+2025-07-03 00:04:30,450 - INFO - Starting results parsing...
+2025-07-03 00:04:30,450 - WARNING - Vina output directory not found: test_diffdock_output/vina_output
+2025-07-03 00:04:30,450 - WARNING - GNINA output directory not found: test_diffdock_output/gnina_output
+2025-07-03 00:04:30,460 - INFO - Parsed 2 DiffDock poses
+2025-07-03 00:04:30,462 - INFO - Generated summary with 2 total poses
+2025-07-03 00:04:30,464 - INFO - Results saved to: test_diffdock.csv
+2025-07-03 00:04:41,955 - INFO - Starting results parsing...
+2025-07-03 00:04:41,955 - INFO - Parsed 9 Vina poses from test_all/vina_output/vina_out.pdbqt
+2025-07-03 00:04:41,955 - INFO - Parsed 4 GNINA poses
+2025-07-03 00:04:41,967 - INFO - Parsed 2 DiffDock poses
+2025-07-03 00:04:41,974 - INFO - Generated summary with 15 total poses
+2025-07-03 00:04:41,977 - INFO - Results saved to: test_all_methods.csv
+2025-07-03 00:04:59,835 - INFO - Starting results parsing...
+2025-07-03 00:04:59,837 - INFO - Parsed 9 Vina poses from vina_output/vina_out.pdbqt
+2025-07-03 00:04:59,837 - ERROR - Failed to parse GNINA results: No GNINA output files found
+2025-07-03 00:04:59,838 - ERROR - Failed to parse DiffDock results: No DiffDock SDF files found
+2025-07-03 00:04:59,841 - INFO - Generated summary with 9 total poses
+2025-07-03 00:04:59,844 - INFO - Results saved to: summary.csv
+2025-07-03 00:04:59,844 - INFO - Failed runs logged to: failed_parsing.json
