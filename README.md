@@ -1,212 +1,141 @@
-# Molecular Docking Wrapper System
+# Molecular Docking Pipeline
 
-A comprehensive multi-backend molecular docking system supporting AutoDock Vina, GNINA, and DiffDock with robust error handling and automatic parameter detection.
+A comprehensive, production-ready molecular docking pipeline supporting AutoDock Vina, GNINA, and DiffDock with batch processing capabilities.
 
-## 🚀 **Features**
+## 📁 Clean Directory Structure
 
-- **Multi-Backend Support**: AutoDock Vina, GNINA, and DiffDock
-- **Intelligent Box Detection**: **4-tier automatic parameter detection system**
-  1. **Bound Ligand Detection**: Uses existing ligands for precise targeting
-  2. **Cavity Detection**: AI-powered cavity identification using geometric analysis
-  3. **Protein Center**: Geometric center with conservative box sizing
-  4. **Default Fallback**: Robust default parameters for any edge cases
-- **Robust Error Handling**: Continues execution even if individual backends fail
-- **Comprehensive Logging**: Detailed logs with timestamps and error tracking
-- **Input Validation**: Checks file formats and required dependencies
-- **PDBQT Formatting**: Automatic cleanup of malformed PDBQT files from MGLTools
-- **Production Scale**: Designed for processing thousands of proteins automatically
+```
+/docking_wrapper/
+├── inputs/                    # Input data
+│   ├── protein.pdb           # Target protein structure
+│   └── ligands/              # Ligand molecules (.smi, .sdf, .mol2)
+├── outputs/                  # All pipeline results
+│   ├── ligandX/              # Individual ligand results
+│   │   ├── vina/            # AutoDock Vina outputs
+│   │   ├── gnina/           # GNINA outputs
+│   │   └── diffdock/        # DiffDock outputs
+│   └── final_summary.csv    # Aggregated results
+├── logs/                     # Centralized logging
+│   ├── batch_log.txt        # Main processing log
+│   └── failed_runs.json     # Failed run tracking
+├── scripts/                  # Core pipeline components
+│   ├── prep_structures.py   # Task 1: Structure preparation
+│   ├── run_docking_multi.py # Task 2: Multi-engine docking
+│   ├── parse_and_score_results.py # Task 3: Results parsing
+│   └── batch_pipeline.py    # Task 4: Batch orchestration
+├── docs/                     # Documentation and examples
+├── Dockerfile               # Container definition
+├── pipeline_config.json     # Pipeline configuration
+└── run_batch_pipeline.py    # Main entry point
+```
 
-## 📦 **Installation & Setup**
+## 🚀 Quick Start
 
-### Prerequisites
+### Basic Usage
 ```bash
-# Install AutoDock Vina
-brew install autodock-vina
+# Run batch docking with sample data
+python3 run_batch_pipeline.py --protein inputs/protein.pdb --ligands inputs/ligands/
 
-# Install MGLTools for structure preparation
-# Download from: http://mgltools.scripps.edu/downloads
+# Enable all docking engines
+python3 run_batch_pipeline.py --protein inputs/protein.pdb --ligands inputs/ligands/ --enable-gnina --enable-diffdock
+
+# Use custom configuration
+python3 run_batch_pipeline.py --protein inputs/protein.pdb --ligands inputs/ligands/ --config pipeline_config.json
 ```
 
-### Dependencies
+### Docker Usage
 ```bash
-pip3 install numpy biopython scikit-learn
+# Build container
+docker build -t docking-pipeline .
+
+# Run with volume mounts
+docker run -v $(pwd)/inputs:/app/inputs \
+           -v $(pwd)/outputs:/app/outputs \
+           -v $(pwd)/logs:/app/logs \
+           docking-pipeline \
+           --protein inputs/protein.pdb --ligands inputs/ligands/
 ```
 
-## 🔧 **Structure Preparation**
+## 📋 Pipeline Tasks
 
-The system includes automatic structure preparation:
+### Task 1: Structure Preparation
+```bash
+python3 scripts/prep_structures.py inputs/protein.pdb inputs/ligands/ligand1.smi
+```
+
+### Task 2: Multi-Engine Docking
+```bash
+python3 scripts/run_docking_multi.py
+```
+
+### Task 3: Results Parsing
+```bash
+python3 scripts/parse_and_score_results.py
+```
+
+### Task 4: Batch Processing
+```bash
+python3 scripts/batch_pipeline.py --protein inputs/protein.pdb --ligands inputs/ligands/
+```
+
+## ⚙️ Configuration
+
+Edit `pipeline_config.json` to customize:
+
+```json
+{
+    "engines": {
+        "vina": {"enabled": true, "exhaustiveness": 8},
+        "gnina": {"enabled": false, "use_gpu": false},
+        "diffdock": {"enabled": false}
+    },
+    "box": {
+        "auto_detect": true,
+        "default_size": [25.0, 25.0, 25.0]
+    },
+    "parallel": {
+        "max_workers": 4
+    }
+}
+```
+
+## 📊 Output Analysis
+
+After running the pipeline:
+
+1. **`outputs/final_summary.csv`** - Combined results from all ligands
+2. **`logs/batch_log.txt`** - Detailed processing logs
+3. **`outputs/ligandX/`** - Individual detailed results per ligand
+
+## 🧪 Testing
 
 ```bash
-# Prepare protein and ligand structures
-python3 prep_structures.py testing/1ubq.pdb testing/aspirin.sdf
+# Run validation tests
+python3 test_batch_pipeline.py
 ```
 
-This will generate:
-- `protein_prepped.pdbqt` (cleaned and formatted)
-- `ligand_prepped.pdbqt` (prepared ligand)
+## 📚 Documentation
 
-## 🎯 **Usage**
+Complete documentation available in `docs/`:
+- `docs/README_directory_structure.md` - Directory layout details
+- `docs/README_batch_pipeline.md` - Batch processing guide
+- `docs/README_parse_results.md` - Results analysis guide
+- `docs/TASK4_COMPLETION_SUMMARY.md` - Implementation summary
 
-### Basic Usage (Vina only)
-```bash
-python3 run_docking_multi.py \
-    --protein protein_prepped.pdbqt \
-    --ligand ligand_prepped.pdbqt \
-    --center_x 20 --center_y 20 --center_z 20 \
-    --size_x 20 --size_y 20 --size_z 20
-```
+## 🔧 Requirements
 
-### Multi-Backend Usage
-```bash
-python3 run_docking_multi.py \
-    --protein protein_prepped.pdbqt \
-    --ligand ligand_prepped.pdbqt \
-    --center_x 20 --center_y 20 --center_z 20 \
-    --size_x 20 --size_y 20 --size_z 20 \
-    --use_gnina \
-    --use_diffdock
-```
+- Python 3.8+
+- AutoDock Vina
+- MGLTools (for structure preparation)
+- Optional: GNINA, DiffDock, Docker
 
-### **Automatic Box Detection (Recommended for Production)**
-For thousands of proteins, simply omit box parameters and let the system detect them automatically:
-```bash
-python3 run_docking_multi.py \
-    --protein protein_prepped.pdbqt \
-    --ligand ligand_prepped.pdbqt
-```
+## 📈 Features
 
-### Automatic Box Detection with Multiple Backends
-```bash
-python3 run_docking_multi.py \
-    --protein protein_prepped.pdbqt \
-    --ligand ligand_prepped.pdbqt \
-    --use_gnina \
-    --use_diffdock
-```
+- **Multi-Engine Support**: Vina, GNINA, DiffDock
+- **Batch Processing**: Handle multiple ligands automatically
+- **Parallel Execution**: Configurable worker processes
+- **Error Handling**: Comprehensive logging and recovery
+- **Docker Ready**: Complete containerized environment
+- **Flexible Input**: SMILES, SDF, MOL2, PDB formats
+- **Auto Box Detection**: Intelligent binding site detection
 
-## 📁 **Output Structure**
-
-```
-./
-├── vina_output/
-│   └── vina_out.pdbqt          # Docked poses with scores
-├── gnina_output/
-│   ├── gnina_out.pdbqt         # GNINA docked poses
-│   ├── gnina.log               # Detailed GNINA log
-│   └── gnina_scores.txt        # Scoring results
-├── diffdock_output/
-│   └── [complex structures]     # DiffDock results
-└── logs/
-    ├── docking_run.log         # Complete execution log
-    └── failed_runs.json        # Error details for debugging
-```
-
-## 🎛️ **Command Line Options**
-
-| Option | Description | Required |
-|--------|-------------|----------|
-| `--protein` | Path to receptor PDBQT file | ✅ |
-| `--ligand` | Path to ligand PDBQT file | ✅ |
-| `--center_x/y/z` | Grid center coordinates | ⚠️ (if no bound ligand) |
-| `--size_x/y/z` | Grid dimensions (Å) | ⚠️ (if no bound ligand) |
-| `--use_gnina` | Enable GNINA backend | ❌ |
-| `--use_diffdock` | Enable DiffDock backend | ❌ |
-| `--output_dir` | Output directory (default: current) | ❌ |
-
-## 📊 **Backend Status**
-
-| Backend | Status | Requirements | Notes |
-|---------|--------|--------------|-------|
-| **AutoDock Vina** | ✅ **Working** | `vina` in PATH | Fast, reliable docking |
-| **GNINA** | ⚠️ **Partial** | CUDA + Build required | CPU-only build possible |
-| **DiffDock** | ⚠️ **Partial** | CUDA + PyTorch | Deep learning approach |
-
-## 🔧 **GNINA Setup** (Optional)
-
-GNINA requires compilation from source:
-```bash
-cd gnina
-mkdir build && cd build
-cmake .. -DCUDA=OFF  # For CPU-only
-make -j$(nproc)
-```
-
-## 🌊 **DiffDock Setup** (Optional)
-
-DiffDock requires PyTorch and CUDA:
-```bash
-git clone https://github.com/gcorso/DiffDock.git
-cd DiffDock
-pip3 install -r requirements.txt
-```
-
-## 🎯 **Automatic Box Parameter Detection**
-
-The system uses a sophisticated 4-tier strategy to automatically determine optimal docking parameters:
-
-### Strategy 1: Bound Ligand Detection
-- Scans for HETATM records with ≤50 heavy atoms
-- Calculates geometric center and bounding box
-- Adds 8Å padding for optimal search space
-- **Best for**: Proteins with co-crystallized ligands
-
-### Strategy 2: Cavity Detection
-- Uses 3D grid-based analysis to identify binding cavities
-- Employs DBSCAN clustering to find distinct pockets
-- Selects largest cavity by volume
-- Adds 10Å padding for comprehensive coverage
-- **Best for**: Apo structures without bound ligands
-
-### Strategy 3: Protein Geometric Center
-- Calculates protein center of mass
-- Uses 40% of protein span (20-30Å per dimension)
-- Conservative approach for unknown binding sites
-- **Best for**: Large proteins or unusual cases
-
-### Strategy 4: Default Parameters
-- Last resort: center (0,0,0) with 25Å³ box
-- Ensures system never fails completely
-- **Best for**: Edge cases or corrupted files
-
-### Example Output
-INFO: Strategy 2: Using largest detected cavity (volume: 145600.0 Ų)
-INFO: Extracted box center: (30.82, 29.37, 16.50), size: (50.00, 52.00, 56.00)
-
-## 📝 **Example Output**
-
-```
-=== Docking Summary ===
-VINA: SUCCESS (time: 2.28s)
-GNINA: SKIPPED/FAILED (time: 0.0s)
-  Reason: GNINA binary not found. Please install GNINA or build it from source.
-DIFFDOCK: SKIPPED/FAILED (time: 3.38s)
-  Reason: CUDA dependencies not available on macOS
-======================
-```
-
-## 🏆 **Key Features Implemented**
-
-1. **Robust Error Handling**: Each backend runs independently
-2. **Automatic Cleanup**: PDBQT formatting fixes for MGLTools output
-3. **Smart Detection**: Automatic binding site parameter extraction
-4. **Comprehensive Logging**: Full execution tracking and debugging
-5. **Flexible Backend Selection**: Mix and match docking methods
-6. **Cross-Platform**: Works on macOS, Linux (with appropriate dependencies)
-
-## 🚧 **Known Limitations**
-
-- GNINA and DiffDock require CUDA for optimal performance
-- macOS lacks CUDA support (affects GNINA/DiffDock)
-- Large proteins may require more memory for DiffDock
-- Box parameters required if no bound ligand is present
-
-## 📞 **Support**
-
-- Check `logs/docking_run.log` for detailed execution info
-- Review `logs/failed_runs.json` for specific error details
-- Ensure all dependencies are properly installed
-- Verify input file formats (PDBQT for proteins/ligands)
-
----
-
-**Status**: Production ready for AutoDock Vina with optional GNINA/DiffDock support 

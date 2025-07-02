@@ -1,0 +1,5 @@
+2025-07-03 00:35:07,992 | INFO     | BatchPipeline        | ================================================================================
+2025-07-03 00:35:07,992 | INFO     | BatchPipeline        | STARTING BATCH MOLECULAR DOCKING PIPELINE
+2025-07-03 00:35:07,992 | INFO     | BatchPipeline        | ================================================================================
+2025-07-03 00:35:07,992 | INFO     | BatchPipeline        | Discovered 3 ligand(s) to process
+2025-07-03 00:35:07,992 | INFO     | BatchPipeline        | Preparing protein structure: inputs/protein.pdb

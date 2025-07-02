@@ -1,3 +1,0 @@
-python3 prep_structures.py -protein testing/1s0q.pdb -ligand testing/ligand.smi
-python3 prep_structures.py -protein testing/1s0q.pdb -ligand testing/aspirin.sdf
-

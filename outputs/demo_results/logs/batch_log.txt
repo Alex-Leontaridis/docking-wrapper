@@ -1,0 +1,31 @@
+2025-07-03 00:28:07,805 | INFO     | BatchPipeline        | ================================================================================
+2025-07-03 00:28:07,805 | INFO     | BatchPipeline        | STARTING BATCH MOLECULAR DOCKING PIPELINE
+2025-07-03 00:28:07,805 | INFO     | BatchPipeline        | ================================================================================
+2025-07-03 00:28:07,805 | INFO     | BatchPipeline        | Discovered 1 ligand(s) to process
+2025-07-03 00:28:07,805 | INFO     | BatchPipeline        | Preparing protein structure: testing/1hsg.pdb
+2025-07-03 00:28:14,577 | INFO     | BatchPipeline        | ================================================================================
+2025-07-03 00:28:14,577 | INFO     | BatchPipeline        | STARTING BATCH MOLECULAR DOCKING PIPELINE
+2025-07-03 00:28:14,577 | INFO     | BatchPipeline        | ================================================================================
+2025-07-03 00:28:14,577 | INFO     | BatchPipeline        | Discovered 1 ligand(s) to process
+2025-07-03 00:28:14,578 | INFO     | BatchPipeline        | Preparing protein structure: /Users/ioannisleontaridis/Desktop/convexia-docking-wrapper/testing/1hsg.pdb
+2025-07-03 00:28:15,646 | ERROR    | BatchPipeline        | Batch pipeline failed: [Errno 2] No such file or directory: 'demo_output/prepared_structures/1hsg_prepared.pdbqt'
+2025-07-03 00:28:15,649 | DEBUG    | BatchPipeline        | Traceback: Traceback (most recent call last):
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/shutil.py", line 815, in move
+    os.rename(src, real_dst)
+FileNotFoundError: [Errno 2] No such file or directory: 'protein_prepped.pdbqt' -> 'demo_output/prepared_structures/1hsg_prepared.pdbqt'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/ioannisleontaridis/Desktop/convexia-docking-wrapper/batch_pipeline.py", line 412, in run_batch_pipeline
+    prepared_protein = self.prepare_protein_once(protein_file)
+  File "/Users/ioannisleontaridis/Desktop/convexia-docking-wrapper/batch_pipeline.py", line 215, in prepare_protein_once
+    shutil.move(prepared_file, prepared_protein)
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/shutil.py", line 835, in move
+    copy_function(src, real_dst)
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/shutil.py", line 434, in copy2
+    copyfile(src, dst, follow_symlinks=follow_symlinks)
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/shutil.py", line 256, in copyfile
+    with open(dst, 'wb') as fdst:
+FileNotFoundError: [Errno 2] No such file or directory: 'demo_output/prepared_structures/1hsg_prepared.pdbqt'
+

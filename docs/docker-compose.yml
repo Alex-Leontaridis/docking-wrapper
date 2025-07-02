@@ -1,0 +1,118 @@
+version: '3.8'
+
+services:
+  docking-pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
+        VCS_REF: ${VCS_REF:-$(git rev-parse --short HEAD)}
+    image: docking-pipeline:latest
+    container_name: molecular-docking-pipeline
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '8.0'
+          memory: 16G
+        reservations:
+          cpus: '2.0'
+          memory: 4G
+    
+    # Environment variables
+    environment:
+      - OMP_NUM_THREADS=4
+      - PYTHONUNBUFFERED=1
+      - RDKIT_CACHE_DIR=/workspace/.rdkit_cache
+      - OPENBABEL_DATADIR=/opt/conda/envs/docking/share/openbabel
+    
+    # Volume mounts
+    volumes:
+      - .:/workspace:rw
+      - docking_cache:/workspace/.cache
+      - rdkit_cache:/workspace/.rdkit_cache
+    
+    # Working directory
+    working_dir: /workspace
+    
+    # Network mode
+    network_mode: bridge
+    
+    # Keep container running for interactive use
+    tty: true
+    stdin_open: true
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import rdkit, pandas, numpy; print('OK')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Labels
+    labels:
+      - "com.docking.service=pipeline"
+      - "com.docking.version=1.0"
+      - "com.docking.description=Molecular docking batch pipeline"
+
+  # Optional Jupyter notebook service for interactive analysis
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: docking-pipeline:latest
+    container_name: docking-jupyter
+    
+    ports:
+      - "8888:8888"
+    
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - JUPYTER_TOKEN=docking123
+    
+    volumes:
+      - .:/workspace:rw
+      - jupyter_data:/home/jovyan/work
+    
+    command: >
+      bash -c "source activate docking &&
+               jupyter lab --ip=0.0.0.0 --port=8888 --no-browser 
+               --allow-root --notebook-dir=/workspace 
+               --NotebookApp.token='docking123'"
+    
+    depends_on:
+      - docking-pipeline
+    
+    profiles:
+      - jupyter
+    
+    restart: unless-stopped
+
+# Named volumes for persistence
+volumes:
+  docking_cache:
+    driver: local
+    labels:
+      - "com.docking.cache=true"
+  
+  rdkit_cache:
+    driver: local
+    labels:
+      - "com.docking.rdkit_cache=true"
+  
+  jupyter_data:
+    driver: local
+    labels:
+      - "com.docking.jupyter=true"
+
+# Networks
+networks:
+  default:
+    name: docking-network
+    driver: bridge 

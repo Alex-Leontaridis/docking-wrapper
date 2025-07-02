@@ -1,0 +1,28 @@
+{
+    "engines": {
+        "vina": {
+            "enabled": true,
+            "exhaustiveness": 8,
+            "num_modes": 5
+        },
+        "gnina": {
+            "enabled": false,
+            "use_gpu": false
+        },
+        "diffdock": {
+            "enabled": false
+        }
+    },
+    "box": {
+        "auto_detect": true,
+        "default_size": [20, 20, 20]
+    },
+    "processing": {
+        "timeout_per_ligand": 300,
+        "max_parallel_workers": 2
+    },
+    "logging": {
+        "level": "INFO",
+        "console_output": true
+    }
+} 
