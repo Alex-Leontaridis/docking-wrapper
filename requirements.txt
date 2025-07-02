@@ -1,0 +1,3 @@
+# Install RDKit and MGLTools via conda (see README.md for instructions)
+meeko
+loguru 
