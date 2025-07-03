@@ -94,17 +94,6 @@ export PATH="$PWD/bin:$PATH"
 
 ---
 
-## Reviewer Checklist
-- [ ] Can install Python dependencies with `pip3 install -r requirements.txt`
-- [ ] Can run the pipeline with dummy GNINA and DiffDock (see above)
-- [ ] Receives clear error messages if a required binary is missing
-- [ ] Can run all main scripts via CLI as documented
-- [ ] Can swap in real GNINA/DiffDock for production use
-- [ ] Finds code modular, well-documented, and robust to errors
-- [ ] README and config options are clear
-
----
-
 ## Configuration
 - All config options are documented in `pipeline_config.json` and in the docstrings of `scripts/batch_pipeline.py`.
 - The pipeline validates config files and CLI arguments at startup, exiting with an error if invalid.
