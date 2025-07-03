@@ -114,10 +114,6 @@ At startup, the scripts check for required binaries using `shutil.which()` or si
 ## Project Status
 - **Ready for review.**
 - Dummy scripts included for GNINA and DiffDock to enable full workflow testing in any environment.
-- Please see the Reviewer Checklist above for guidance.
 
 ---
-
-## Support
-For issues, please check the logs in the `logs/` directory or open an issue on the repository.
 
