@@ -15,6 +15,7 @@ import pandas as pd
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 import numpy as np
+import shutil
 
 # Optional imports for RMSD calculation
 try:
@@ -608,7 +609,14 @@ def process_batch_directories(base_dirs, output_dir, reference=None, verbose=Fal
 
 
 def main():
-    """Main CLI interface."""
+    # Check for required external binaries
+    required_binaries = ["vina", "gnina", "diffdock"]
+    missing = [b for b in required_binaries if shutil.which(b) is None]
+    if missing:
+        print(f"ERROR: Missing required external binaries: {', '.join(missing)}")
+        print("Please install them and ensure they are in your PATH.")
+        sys.exit(1)
+    
     parser = argparse.ArgumentParser(
         description='Parse and score docking results from Vina, GNINA, and DiffDock',
         formatter_class=argparse.RawDescriptionHelpFormatter,

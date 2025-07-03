@@ -206,16 +206,12 @@ def prepare_protein(protein_file):
             mgltools_pythonsh = os.path.expanduser('~/mgltools_1.5.7_MacOS-X/bin/pythonsh')
             prepare_script = os.path.expanduser('~/mgltools_1.5.7_MacOS-X/MGLToolsPckgs/AutoDockTools/Utilities24/prepare_receptor4.py')
             
-            # Convert to absolute paths to avoid path issues with MGLTools
-            abs_protein_file = os.path.abspath(protein_file)
-            abs_output_file = os.path.abspath(output_file)
-            
             # Check if MGLTools is available (for macOS/local development)
             if os.path.exists(mgltools_pythonsh) and os.path.exists(prepare_script):
                 cmd = [
                     mgltools_pythonsh, prepare_script,
-                    '-r', abs_protein_file,
-                    '-o', abs_output_file,
+                    '-r', protein_file,
+                    '-o', output_file,
                     '-A', 'hydrogens',  # Add hydrogens
                     '-U', 'waters',     # Remove waters
                 ]
@@ -235,9 +231,9 @@ def prepare_protein(protein_file):
                     from meeko import PDBQTWriterLegacy
                     
                     # Load PDB file and convert to PDBQT
-                    mol = Chem.MolFromPDBFile(abs_protein_file, removeHs=False)
+                    mol = Chem.MolFromPDBFile(protein_file, removeHs=False)
                     if mol is None:
-                        logging.error(f"Failed to load protein from {abs_protein_file}")
+                        logging.error(f"Failed to load protein from {protein_file}")
                         sys.exit(1)
                     
                     # Add hydrogens if not present
@@ -247,7 +243,7 @@ def prepare_protein(protein_file):
                     writer = PDBQTWriterLegacy()
                     pdbqt_string = writer.write_string(mol)
                     
-                    with open(abs_output_file, 'w') as f:
+                    with open(output_file, 'w') as f:
                         f.write(pdbqt_string)
                     
                     logging.info(f"Protein prepared using meeko fallback method")
@@ -261,7 +257,7 @@ def prepare_protein(protein_file):
                     # Try simple PDB to PDBQT conversion as last resort
                     logging.info("Attempting basic PDB to PDBQT conversion...")
                     try:
-                        _simple_pdb_to_pdbqt(abs_protein_file, abs_output_file)
+                        _simple_pdb_to_pdbqt(protein_file, output_file)
                     except Exception as e2:
                         logging.error(f"All protein preparation methods failed: {e2}")
                         sys.exit(1)
@@ -433,6 +429,11 @@ def convert_ligand_to_pdbqt(mol, pdbqt_file):
 
 
 def main():
+    # Check for MGLTools (optional, but warn if missing)
+    mgltools_path = os.path.expanduser('~/mgltools_1.5.7_MacOS-X/bin/pythonsh')
+    if not os.path.exists(mgltools_path):
+        print("Warning: MGLTools not found at ~/mgltools_1.5.7_MacOS-X/bin/pythonsh. Protein preparation may be limited.")
+
     parser = argparse.ArgumentParser(
         description="Preprocess protein and ligand files for docking."
     )

@@ -94,6 +94,9 @@ class BatchDockingPipeline:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
         
+        # Check for required external binaries
+        self._check_external_binaries()
+        
         # Load configuration
         self.config = self._load_config(config_path)
         
@@ -109,6 +112,22 @@ class BatchDockingPipeline:
         
         # Ensure base output directories
         self._ensure_output_dirs()
+    
+    def _check_external_binaries(self):
+        """Check for required external binaries and exit if missing."""
+        required_binaries = ["vina", "gnina", "diffdock"]
+        missing = []
+        for binary in required_binaries:
+            if shutil.which(binary) is None:
+                missing.append(binary)
+        # Check for MGLTools (optional, but warn if missing)
+        mgltools_path = os.path.expanduser('~/mgltools_1.5.7_MacOS-X/bin/pythonsh')
+        if not os.path.exists(mgltools_path):
+            print(f"{COLOR_WARN}Warning: MGLTools not found at {mgltools_path}. Protein preparation may be limited.{COLOR_RESET}")
+        if missing:
+            print(f"{COLOR_FAIL}Missing required external binaries: {', '.join(missing)}{COLOR_RESET}")
+            print(f"Please install them and ensure they are in your PATH.")
+            sys.exit(1)
     
     def _load_config(self, config_path: Optional[str]) -> Dict:
         """Load and validate configuration."""

@@ -1,0 +1,25 @@
+#!/bin/bash
+# Dummy GNINA script for testing
+
+echo "[DUMMY GNINA] Called with args: $@"
+
+# Find output file argument (after --out)
+for i in "$@"; do
+    if [[ $prev == 1 ]]; then
+        out_file="$i"
+        break
+    fi
+    if [[ "$i" == "--out" ]]; then
+        prev=1
+    else
+        prev=0
+    fi
+    done
+
+# Create dummy output file if specified
+if [[ -n "$out_file" ]]; then
+    mkdir -p "$(dirname "$out_file")"
+    echo "REMARK DUMMY GNINA OUTPUT" > "$out_file"
+fi
+
+exit 0 

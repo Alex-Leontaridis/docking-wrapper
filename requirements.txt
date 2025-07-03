@@ -1,0 +1,26 @@
+# Core dependencies
+pandas
+numpy
+colorama
+argparse
+logging
+shutil
+pathlib
+functools
+multiprocessing
+
+# Docking and chemistry
+rdkit
+meeko
+biopython
+scikit-learn
+MDAnalysis
+
+# Optional (for pretty tables)
+tabulate
+
+# For plotting and testing (if needed in future)
+matplotlib
+pytest
+
+# Note: Some dependencies (e.g., vina, gnina, diffdock) are external binaries and must be installed separately. 

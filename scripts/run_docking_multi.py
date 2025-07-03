@@ -574,6 +574,19 @@ def run_batch_docking(protein_files, ligand_files, output_base_dir, use_gnina=Fa
 
 # --- Main CLI ---
 def main():
+    # Check for required external binaries
+    required_binaries = ["vina"]
+    if '--use_gnina' in sys.argv or '--use_diffdock' in sys.argv:
+        if '--use_gnina' in sys.argv:
+            required_binaries.append("gnina")
+        if '--use_diffdock' in sys.argv:
+            required_binaries.append("diffdock")
+    missing = [b for b in required_binaries if shutil.which(b) is None]
+    if missing:
+        print(f"ERROR: Missing required external binaries: {', '.join(missing)}")
+        print("Please install them and ensure they are in your PATH.")
+        sys.exit(1)
+
     parser = argparse.ArgumentParser(description='Docking Wrapper for Vina, GNINA, and DiffDock')
     parser.add_argument('--protein', required=True, help='Path to preprocessed .pdbqt protein file')
     parser.add_argument('--ligand', required=True, help='Path to preprocessed .pdbqt ligand file')
