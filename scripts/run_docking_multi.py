@@ -279,25 +279,76 @@ def run_vina(protein, ligand, output_dir, box_params):
     status['time'] = round(time.time() - start, 2)
     return status
 
-def run_gnina(protein, ligand, output_dir, use_gpu=False):
-    """Run GNINA CLI for docking and scoring."""
-    # Try different possible locations for gnina binary
-    gnina_paths = [
+def load_backend_config():
+    """Load backend configuration from installation."""
+    config_file = Path.cwd() / "backend_config.json"
+    if config_file.exists():
+        try:
+            with open(config_file, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            logging.warning(f"Failed to load backend config: {e}")
+    return None
+
+def find_gnina_binary():
+    """Find GNINA binary in various possible locations."""
+    possible_paths = [
         'gnina',  # In PATH
-        './gnina/build/gnina',  # Local build
-        os.path.expanduser('~/gnina/build/gnina'),  # User build
+        '/usr/local/bin/gnina',  # Standard installation
+        '/opt/conda/envs/docking/bin/gnina',  # Conda environment
+        './gnina',  # Current directory
+        os.path.expanduser('~/gnina'),  # User home
+        '/usr/bin/gnina',  # System binary
     ]
     
-    gnina_bin = None
-    for path in gnina_paths:
-        if os.path.isfile(path) or (path == 'gnina' and shutil.which('gnina')):
-            gnina_bin = path
-            break
+    for path in possible_paths:
+        if shutil.which(path):
+            logging.info(f"Found GNINA binary at: {path}")
+            return path
+    
+    # Check environment variable
+    gnina_path = os.environ.get('GNINA_PATH')
+    if gnina_path and os.path.isfile(gnina_path):
+        logging.info(f"Found GNINA binary from environment: {gnina_path}")
+        return gnina_path
+    
+    logging.warning("GNINA binary not found in any standard location")
+    return None
+
+def find_diffdock_script():
+    """Find DiffDock inference script in various possible locations."""
+    possible_paths = [
+        'DiffDock/inference.py',  # Current directory
+        './DiffDock/inference.py',  # Relative path
+        '/opt/DiffDock/inference.py',  # Docker installation
+        os.path.expanduser('~/DiffDock/inference.py'),  # User home
+        'inference.py',  # If in PATH somehow
+    ]
+    
+    for path in possible_paths:
+        if os.path.isfile(path):
+            logging.info(f"Found DiffDock script at: {path}")
+            return path
+    
+    # Check environment variable
+    diffdock_path = os.environ.get('DIFFDOCK_PATH')
+    if diffdock_path:
+        script_path = os.path.join(diffdock_path, 'inference.py')
+        if os.path.isfile(script_path):
+            logging.info(f"Found DiffDock script from environment: {script_path}")
+            return script_path
+    
+    logging.warning("DiffDock inference script not found in any standard location")
+    return None
+
+def run_gnina(protein, ligand, output_dir, use_gpu=False):
+    """Run GNINA CLI for docking and scoring."""
+    gnina_bin = find_gnina_binary()
     
     if not gnina_bin:
         return {
             'success': False, 
-            'error': 'GNINA binary not found. Please install GNINA or build it from source.',
+            'error': 'GNINA binary not found. Please install GNINA or build it from source. Run: python3 scripts/install_backends.py',
             'time': 0.0
         }
     
@@ -306,88 +357,128 @@ def run_gnina(protein, ligand, output_dir, use_gpu=False):
     gnina_score = os.path.join(output_dir, GNINA_OUT, 'gnina_scores.txt')
     status = {'success': False, 'error': None, 'time': None}
     start = time.time()
+    
     try:
+        # Ensure output directory exists
+        os.makedirs(os.path.dirname(gnina_out), exist_ok=True)
+        
         cmd = [
             gnina_bin,
             '--receptor', protein,
             '--ligand', ligand,
             '--out', gnina_out,
             '--log', gnina_log,
-            '--score_only',
-            '--scorefile', gnina_score
+            '--autobox_ligand', ligand,  # Use ligand for autoboxing
+            '--autobox_add', '8'  # Add padding
         ]
+        
+        # Add GPU support if requested and available
         if use_gpu:
-            cmd.append('--gpu')
+            cmd.extend(['--gpu', '--cnn_scoring'])
+        else:
+            cmd.append('--cpu')
+            
+        # Add scoring file
+        cmd.extend(['--score_only', '--scorefile', gnina_score])
+        
         logging.info(f'Running GNINA: {" ".join(cmd)}')
-        subprocess.run(cmd, check=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        
         if not os.path.isfile(gnina_out):
             raise RuntimeError('GNINA did not produce output file.')
+            
         status['success'] = True
         logging.info('GNINA docking completed successfully.')
+        
+    except subprocess.CalledProcessError as e:
+        status['error'] = f"GNINA failed with exit code {e.returncode}: {e.stderr}"
+        logging.error(f'[GNINA] Docking failed: {status["error"]}')
     except Exception as e:
         status['error'] = str(e)
         logging.error(f'[GNINA] Docking failed: {e}', exc_info=True)
+        
     status['time'] = round(time.time() - start, 2)
     return status
 
 def run_diffdock(protein, ligand, output_dir):
-    """Run DiffDock in blind docking mode."""
-    # Check for DiffDock inference script
-    diffdock_script = os.path.join('DiffDock', 'inference.py')
-    if not os.path.isfile(diffdock_script):
+    """Run DiffDock for pose prediction."""
+    diffdock_script = find_diffdock_script()
+    
+    if not diffdock_script:
         return {
             'success': False,
-            'error': f'DiffDock script not found at {diffdock_script}. Please clone DiffDock repository.',
+            'error': 'DiffDock script not found at expected locations. Please install DiffDock.',
             'time': 0.0
         }
     
-    diffdock_out = os.path.join(output_dir, DIFFDOCK_OUT, 'diffdock_out.sdf')
     status = {'success': False, 'error': None, 'time': None}
     start = time.time()
+    
     try:
-        # Create a simple config for DiffDock
+        # Ensure output directory exists
+        diffdock_out_dir = os.path.join(output_dir, DIFFDOCK_OUT)
+        os.makedirs(diffdock_out_dir, exist_ok=True)
+        
+        # Create temporary CSV file for DiffDock input
         import tempfile
         with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
-            f.write('protein_path,ligand_description,protein_sequence\n')
-            f.write(f'{os.path.abspath(protein)},ligand,\n')
+            # DiffDock expects: protein_path,ligand_description,complex_name
+            f.write('protein_path,ligand_description,complex_name\n')
+            
+            # Convert ligand to SMILES if it's a file
+            if ligand.endswith('.pdbqt'):
+                # Extract SMILES from PDBQT (simplified)
+                ligand_name = os.path.splitext(os.path.basename(ligand))[0]
+                # For now, use a placeholder SMILES - in production you'd convert properly
+                smiles = "CCO"  # Placeholder
+            else:
+                smiles = ligand  # Assume it's already SMILES
+                ligand_name = "ligand"
+            
+            f.write(f'{protein},{smiles},{ligand_name}\n')
             csv_file = f.name
         
+        # Run DiffDock
         cmd = [
             'python3', diffdock_script,
             '--protein_ligand_csv', csv_file,
-            '--out_dir', os.path.join(output_dir, DIFFDOCK_OUT),
+            '--out_dir', diffdock_out_dir,
             '--inference_steps', '20',
             '--samples_per_complex', '10',
             '--batch_size', '10'
         ]
+        
         logging.info(f'Running DiffDock: {" ".join(cmd)}')
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
         
-        # Clean up temp file
+        # Clean up temporary file
         os.unlink(csv_file)
         
-        # Check for output (DiffDock creates complex directory structure)
-        output_found = False
-        diffdock_output_dir = os.path.join(output_dir, DIFFDOCK_OUT)
-        for root, dirs, files in os.walk(diffdock_output_dir):
-            if any(f.endswith('.sdf') for f in files):
-                output_found = True
-                break
-        
-        if not output_found:
-            raise RuntimeError('DiffDock did not produce output files.')
+        # Check if output was produced
+        output_files = list(Path(diffdock_out_dir).glob('**/*.sdf'))
+        if not output_files:
+            raise RuntimeError('DiffDock did not produce any SDF output files.')
         
         status['success'] = True
-        logging.info('DiffDock docking completed successfully.')
+        logging.info(f'DiffDock completed successfully. Generated {len(output_files)} poses.')
+        
+    except subprocess.CalledProcessError as e:
+        status['error'] = f"DiffDock failed with exit code {e.returncode}: {e.stderr}"
+        logging.error(f'[DiffDock] Docking failed: {status["error"]}')
+        if 'csv_file' in locals():
+            try:
+                os.unlink(csv_file)
+            except:
+                pass
     except Exception as e:
         status['error'] = str(e)
         logging.error(f'[DiffDock] Docking failed: {e}', exc_info=True)
-        # Clean up temp file if it exists
-        try:
-            if 'csv_file' in locals():
+        if 'csv_file' in locals():
+            try:
                 os.unlink(csv_file)
-        except:
-            pass
+            except:
+                pass
+    
     status['time'] = round(time.time() - start, 2)
     return status
 

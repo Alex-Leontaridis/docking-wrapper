@@ -1,4 +1,12 @@
-2025-07-03 00:37:38,292 [INFO] Discovered 3 ligand(s) to process
-2025-07-03 00:37:38,292 [INFO] Discovered 1 ligand(s) to process
-2025-07-03 00:37:38,872 [INFO] Strategy 2: Using largest detected cavity (volume: 9680.0 Ų)
-2025-07-03 00:37:38,874 [INFO] Discovered 3 ligand(s) to process
+2025-07-03 11:42:34,302 [INFO] Starting structure preparation...
+2025-07-03 11:42:34,302 [INFO] Preparing protein: cleaning, adding hydrogens, assigning Gasteiger charges, converting to PDBQT...
+2025-07-03 11:42:34,306 [INFO] Running MGLTools: /Users/ioannisleontaridis/mgltools_1.5.7_MacOS-X/bin/pythonsh /Users/ioannisleontaridis/mgltools_1.5.7_MacOS-X/MGLToolsPckgs/AutoDockTools/Utilities24/prepare_receptor4.py -r /Users/ioannisleontaridis/Desktop/convexia-docking-wrapper/inputs/protein.pdb -o /Users/ioannisleontaridis/Desktop/convexia-docking-wrapper/protein_prepped.pdbqt -A hydrogens -U waters
+2025-07-03 11:42:42,882 [INFO] Cleaning PDBQT formatting...
+2025-07-03 11:42:42,895 [INFO] Cleaned PDBQT formatting in protein_prepped.pdbqt
+2025-07-03 11:42:42,895 [INFO] Protein cleaned (waters removed), hydrogens added, Gasteiger charges assigned, and saved as: protein_prepped.pdbqt
+2025-07-03 11:42:42,895 [INFO] Prepared protein file: protein_prepped.pdbqt
+2025-07-03 11:42:42,895 [INFO] Ligand input detected as SDF. Loading molecule(s).
+2025-07-03 11:42:42,902 [INFO] Performing energy minimization for SDF molecule...
+2025-07-03 11:42:42,912 [INFO] Ligand converted and saved as: ligand_prepped.pdbqt
+2025-07-03 11:42:42,913 [INFO] Ligand prepared: ligand_prepped.pdbqt
+2025-07-03 11:42:42,913 [INFO] Structure preparation completed successfully

@@ -140,6 +140,62 @@ def clean_pdbqt_formatting(pdbqt_file):
         raise
 
 
+def _simple_pdb_to_pdbqt(pdb_file, pdbqt_file):
+    """Simple PDB to PDBQT conversion as last resort fallback."""
+    try:
+        with open(pdb_file, 'r') as f:
+            pdb_lines = f.readlines()
+        
+        pdbqt_lines = []
+        for line in pdb_lines:
+            if line.startswith(('ATOM', 'HETATM')):
+                # Convert PDB line to basic PDBQT format
+                if len(line) >= 54:  # Minimum length for coordinates
+                    # Take only the standard PDB part (up to column 78) but remove element column
+                    # PDB format: columns 77-78 contain element symbol which we need to replace
+                    pdb_part = line[:76].rstrip()  # Stop before element column
+                    
+                    # Determine AutoDock atom type based on atom name
+                    atom_name = line[12:16].strip()
+                    if atom_name.startswith('C'):
+                        autodock_type = "C"
+                    elif atom_name.startswith('N'):
+                        autodock_type = "N"
+                    elif atom_name.startswith('O'):
+                        autodock_type = "O"
+                    elif atom_name.startswith('S'):
+                        autodock_type = "S"
+                    elif atom_name.startswith('P'):
+                        autodock_type = "P"
+                    elif atom_name.startswith('H'):
+                        autodock_type = "H"
+                    else:
+                        autodock_type = "C"  # Default to carbon
+                    
+                    # Format: PDB_part + spaces + charge + space + atom_type
+                    # Ensure proper spacing to column 79
+                    padding_needed = 76 - len(pdb_part)
+                    if padding_needed > 0:
+                        pdb_part += ' ' * padding_needed
+                    
+                    pdbqt_line = f"{pdb_part}  +0.000 {autodock_type}"
+                    pdbqt_lines.append(pdbqt_line + '\n')
+            else:
+                # Skip header and other PDB-specific lines that Vina doesn't need
+                # Only keep essential structural information
+                if line.startswith(('REMARK', 'ROOT', 'ENDROOT', 'BRANCH', 'ENDBRANCH', 'TORSDOF')):
+                    pdbqt_lines.append(line)
+        
+        with open(pdbqt_file, 'w') as f:
+            f.writelines(pdbqt_lines)
+        
+        logging.info(f"Basic PDB to PDBQT conversion completed: {pdbqt_file}")
+        
+    except Exception as e:
+        logging.error(f"Simple PDB to PDBQT conversion failed: {e}")
+        raise
+
+
 def prepare_protein(protein_file):
     ext = os.path.splitext(protein_file)[1].lower()
     output_file = 'protein_prepped.pdbqt'
@@ -149,20 +205,66 @@ def prepare_protein(protein_file):
             logging.info(f"Preparing protein: cleaning, adding hydrogens, assigning Gasteiger charges, converting to PDBQT...")
             mgltools_pythonsh = os.path.expanduser('~/mgltools_1.5.7_MacOS-X/bin/pythonsh')
             prepare_script = os.path.expanduser('~/mgltools_1.5.7_MacOS-X/MGLToolsPckgs/AutoDockTools/Utilities24/prepare_receptor4.py')
-            cmd = [
-                mgltools_pythonsh, prepare_script,
-                '-r', protein_file,
-                '-o', output_file,
-                '-A', 'hydrogens',  # Add hydrogens
-                '-U', 'waters',     # Remove waters
-            ]
-            logging.info(f"Running: {' '.join(cmd)}")
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode != 0:
-                logging.error(f"MGLTools failed: {result.stderr}\n{result.stdout}")
-                if 'IndexError' in result.stderr or 'Unable to assign HAD type' in result.stderr:
-                    logging.error("Protein structure appears to be missing atoms or is corrupted. Please repair the PDB using PDBFixer (https://pdbfixer.openmm.org/) and try again.")
-                sys.exit(1)
+            
+            # Convert to absolute paths to avoid path issues with MGLTools
+            abs_protein_file = os.path.abspath(protein_file)
+            abs_output_file = os.path.abspath(output_file)
+            
+            # Check if MGLTools is available (for macOS/local development)
+            if os.path.exists(mgltools_pythonsh) and os.path.exists(prepare_script):
+                cmd = [
+                    mgltools_pythonsh, prepare_script,
+                    '-r', abs_protein_file,
+                    '-o', abs_output_file,
+                    '-A', 'hydrogens',  # Add hydrogens
+                    '-U', 'waters',     # Remove waters
+                ]
+                logging.info(f"Running MGLTools: {' '.join(cmd)}")
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                if result.returncode != 0:
+                    logging.error(f"MGLTools failed: {result.stderr}\n{result.stdout}")
+                    if 'IndexError' in result.stderr or 'Unable to assign HAD type' in result.stderr:
+                        logging.error("Protein structure appears to be missing atoms or is corrupted. Please repair the PDB using PDBFixer (https://pdbfixer.openmm.org/) and try again.")
+                    sys.exit(1)
+            else:
+                # Fallback for Docker/Linux environments - use meeko for basic conversion
+                logging.info("MGLTools not found. Using meeko for basic protein preparation...")
+                try:
+                    from Bio import PDB
+                    from rdkit import Chem
+                    from meeko import PDBQTWriterLegacy
+                    
+                    # Load PDB file and convert to PDBQT
+                    mol = Chem.MolFromPDBFile(abs_protein_file, removeHs=False)
+                    if mol is None:
+                        logging.error(f"Failed to load protein from {abs_protein_file}")
+                        sys.exit(1)
+                    
+                    # Add hydrogens if not present
+                    mol = Chem.AddHs(mol)
+                    
+                    # Write PDBQT using meeko
+                    writer = PDBQTWriterLegacy()
+                    pdbqt_string = writer.write_string(mol)
+                    
+                    with open(abs_output_file, 'w') as f:
+                        f.write(pdbqt_string)
+                    
+                    logging.info(f"Protein prepared using meeko fallback method")
+                    
+                except ImportError as e:
+                    logging.error(f"Required packages not available for protein preparation: {e}")
+                    logging.error("Please install MGLTools or ensure BioPython and meeko are available")
+                    sys.exit(1)
+                except Exception as e:
+                    logging.error(f"Meeko protein preparation failed: {e}")
+                    # Try simple PDB to PDBQT conversion as last resort
+                    logging.info("Attempting basic PDB to PDBQT conversion...")
+                    try:
+                        _simple_pdb_to_pdbqt(abs_protein_file, abs_output_file)
+                    except Exception as e2:
+                        logging.error(f"All protein preparation methods failed: {e2}")
+                        sys.exit(1)
             
             # Clean up PDBQT formatting issues
             logging.info("Cleaning PDBQT formatting...")

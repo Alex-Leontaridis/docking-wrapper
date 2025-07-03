@@ -1,8 +1,7 @@
 {
   "_description": "Batch Molecular Docking Pipeline Configuration",
   "_version": "1.0",
-  "_last_updated": "2024-12-19",
-  
+  "_last_updated": "2025-07-03",
   "engines": {
     "vina": {
       "enabled": true,
@@ -38,22 +37,36 @@
       "no_final_step_noise": false
     }
   },
-  
   "box": {
     "auto_detect": true,
     "detection_strategy": "auto",
-    "default_center": [0.0, 0.0, 0.0],
-    "default_size": [25.0, 25.0, 25.0],
+    "default_center": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "default_size": [
+      25.0,
+      25.0,
+      25.0
+    ],
     "padding": 8.0,
-    "min_size": [15.0, 15.0, 15.0],
-    "max_size": [40.0, 40.0, 40.0],
+    "min_size": [
+      15.0,
+      15.0,
+      15.0
+    ],
+    "max_size": [
+      40.0,
+      40.0,
+      40.0
+    ],
     "cavity_detection": {
       "grid_spacing": 2.0,
       "probe_radius": 1.4,
       "min_cavity_volume": 100.0
     }
   },
-  
   "timeouts": {
     "preparation": 300,
     "vina": 1800,
@@ -62,30 +75,32 @@
     "parsing": 300,
     "overall_per_ligand": 10800
   },
-  
   "parallel": {
     "max_workers": 4,
     "chunk_size": 1,
     "prefer_parallel": true,
     "min_ligands_for_parallel": 2
   },
-  
   "retry": {
     "max_attempts": 2,
-    "retry_on_failure": ["preparation", "vina"],
+    "retry_on_failure": [
+      "preparation",
+      "vina"
+    ],
     "retry_delay": 5,
     "exponential_backoff": true
   },
-  
   "output": {
     "keep_intermediate_files": true,
     "compress_large_files": false,
     "cleanup_failed_runs": false,
     "detailed_logging": true,
     "save_docking_logs": true,
-    "export_formats": ["csv", "json"]
+    "export_formats": [
+      "csv",
+      "json"
+    ]
   },
-  
   "logging": {
     "level": "INFO",
     "max_file_size_mb": 100,
@@ -95,7 +110,6 @@
     "log_performance": true,
     "log_memory_usage": false
   },
-  
   "filters": {
     "min_poses_required": 1,
     "max_poses_per_method": 50,
@@ -104,7 +118,6 @@
     "filter_duplicates": true,
     "duplicate_rmsd_threshold": 2.0
   },
-  
   "validation": {
     "check_file_formats": true,
     "validate_structures": true,
@@ -113,7 +126,6 @@
     "max_atoms_per_ligand": 200,
     "max_rotatable_bonds": 20
   },
-  
   "performance": {
     "memory_limit_gb": null,
     "disk_space_check": true,
@@ -121,11 +133,10 @@
     "monitor_resources": false,
     "optimize_for": "speed"
   },
-  
   "experimental": {
     "enable_ml_predictions": false,
     "use_ensemble_scoring": false,
     "advanced_cavity_detection": false,
     "dynamic_box_sizing": false
   }
-} 
+}

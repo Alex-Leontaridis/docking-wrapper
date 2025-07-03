@@ -1,4 +1,4 @@
 {
-  "gnina": "Failed to parse GNINA results: No GNINA output files found",
-  "diffdock": "Failed to parse DiffDock results: No DiffDock SDF files found"
+  "gnina": "GNINA binary not found. Please install GNINA or build it from source. Run: python3 scripts/install_backends.py",
+  "diffdock": "DiffDock failed with exit code 1: Traceback (most recent call last):\n  File \"/Users/ioannisleontaridis/Desktop/convexia-docking-wrapper/DiffDock/inference.py\", line 21, in <module>\n    from torch_geometric.loader import DataLoader\nModuleNotFoundError: No module named 'torch_geometric'\n"
 }

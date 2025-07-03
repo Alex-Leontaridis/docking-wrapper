@@ -20,6 +20,30 @@ import shutil
 from multiprocessing import Pool, cpu_count
 from functools import partial
 
+# Pretty output helpers
+try:
+    from colorama import init as colorama_init, Fore, Style
+    colorama_init()
+    COLOR_OK = Fore.GREEN + Style.BRIGHT
+    COLOR_FAIL = Fore.RED + Style.BRIGHT
+    COLOR_WARN = Fore.YELLOW + Style.BRIGHT
+    COLOR_INFO = Fore.CYAN + Style.BRIGHT
+    COLOR_RESET = Style.RESET_ALL
+except ImportError:
+    COLOR_OK = COLOR_FAIL = COLOR_WARN = COLOR_INFO = COLOR_RESET = ''
+
+def pretty_status(success):
+    return f"{COLOR_OK}✓{COLOR_RESET}" if success else f"{COLOR_FAIL}✗{COLOR_RESET}"
+
+def pretty_stage(stage):
+    return f"{COLOR_INFO}{stage}{COLOR_RESET}"
+
+try:
+    from tabulate import tabulate
+    HAVE_TABULATE = True
+except ImportError:
+    HAVE_TABULATE = False
+
 # Add scripts directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -203,26 +227,165 @@ class BatchDockingPipeline:
         # Validate protein file
         validate_file(protein_file, SUPPORTED_PROTEIN_EXT, "Protein")
         
+        # Convert protein file to absolute path
+        abs_protein_file = os.path.abspath(protein_file)
+        
         # Prepare protein in the prepared_structures directory
         prepared_dir = self.output_dir / "prepared_structures"
         protein_name = Path(protein_file).stem
         prepared_protein = prepared_dir / f"{protein_name}_prepared.pdbqt"
         
-        # Use existing preparation function but with custom output
-        original_wd = os.getcwd()
-        try:
-            os.chdir(prepared_dir)
-            prepared_file = prepare_protein(protein_file)
-            # Move to final location with proper naming
-            if prepared_file != str(prepared_protein):
-                # Ensure target directory exists
-                prepared_protein.parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(prepared_file, prepared_protein)
-        finally:
-            os.chdir(original_wd)
+        # Use custom preparation with absolute paths to avoid directory changes
+        prepared_file = self._prepare_protein_custom(abs_protein_file, str(prepared_protein))
         
         self.logger.info(f"Protein prepared: {prepared_protein}")
         return str(prepared_protein)
+    
+    def _prepare_protein_custom(self, protein_file: str, output_file: str) -> str:
+        """Custom protein preparation that handles absolute paths correctly."""
+        import subprocess
+        
+        ext = os.path.splitext(protein_file)[1].lower()
+        
+        if ext == '.pdb':
+            try:
+                self.logger.info("Preparing protein: cleaning, adding hydrogens, assigning Gasteiger charges, converting to PDBQT...")
+                
+                # Ensure output directory exists
+                os.makedirs(os.path.dirname(output_file), exist_ok=True)
+                
+                mgltools_pythonsh = os.path.expanduser('~/mgltools_1.5.7_MacOS-X/bin/pythonsh')
+                prepare_script = os.path.expanduser('~/mgltools_1.5.7_MacOS-X/MGLToolsPckgs/AutoDockTools/Utilities24/prepare_receptor4.py')
+                
+                # Check if MGLTools is available (for macOS/local development)
+                if os.path.exists(mgltools_pythonsh) and os.path.exists(prepare_script):
+                    cmd = [
+                        mgltools_pythonsh, prepare_script,
+                        '-r', protein_file,
+                        '-o', output_file,
+                        '-A', 'hydrogens',  # Add hydrogens
+                        '-U', 'waters',     # Remove waters
+                    ]
+                    
+                    self.logger.info(f"Running MGLTools: {' '.join(cmd)}")
+                    result = subprocess.run(cmd, capture_output=True, text=True)
+                    
+                    if result.returncode != 0:
+                        self.logger.error(f"MGLTools failed: {result.stderr}\n{result.stdout}")
+                        raise Exception(f"MGLTools preparation failed: {result.stderr}")
+                else:
+                    # Fallback for Docker/Linux environments
+                    self.logger.info("MGLTools not found. Using simple PDB to PDBQT conversion...")
+                    self._simple_pdb_to_pdbqt(protein_file, output_file)
+                    # Skip cleaning step for simple conversion - it's already in proper format
+                    self.logger.info(f"Basic PDB to PDBQT conversion completed: {output_file}")
+                    return output_file
+                
+                # Clean up PDBQT formatting issues (only for MGLTools output)
+                try:
+                    self.logger.info("Cleaning PDBQT formatting...")
+                    self._clean_pdbqt_formatting(output_file)
+                except Exception as e:
+                    self.logger.warning(f"PDBQT cleaning failed, but continuing: {e}")
+                    # Don't raise - cleaning is optional
+                
+                self.logger.info(f"Protein cleaned, hydrogens added, Gasteiger charges assigned, and saved as: {output_file}")
+                return output_file
+                
+            except Exception as e:
+                self.logger.error(f"Error during protein preparation: {e}")
+                raise
+                
+        elif ext == '.pdbqt':
+            # If already PDBQT, just copy to target location
+            if protein_file != output_file:
+                os.makedirs(os.path.dirname(output_file), exist_ok=True)
+                shutil.copy2(protein_file, output_file)
+            self.logger.info(f"PDBQT file copied to: {output_file}")
+            return output_file
+        else:
+            raise ValueError(f"Unsupported protein file format: {ext}")
+    
+    def _clean_pdbqt_formatting(self, pdbqt_file: str):
+        """Simplified PDBQT cleaning for batch pipeline."""
+        import tempfile
+        
+        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.pdbqt')
+        
+        try:
+            with open(pdbqt_file, 'r') as infile:
+                for line in infile:
+                    if line.startswith(('ATOM', 'HETATM')):
+                        # Basic cleanup - skip problematic alternate conformations
+                        alt_loc = line[16:17].strip()
+                        if alt_loc and alt_loc not in ['', ' ', 'A']:
+                            continue
+                    temp_file.write(line)
+            
+            temp_file.close()
+            shutil.move(temp_file.name, pdbqt_file)
+            self.logger.info(f"Cleaned PDBQT formatting in {pdbqt_file}")
+            
+        except Exception as e:
+            self.logger.error(f"Error cleaning PDBQT file: {e}")
+            if os.path.exists(temp_file.name):
+                os.unlink(temp_file.name)
+            # Don't raise - cleaning is optional
+    
+    def _simple_pdb_to_pdbqt(self, pdb_file: str, pdbqt_file: str):
+        """Simple PDB to PDBQT conversion for Docker environments."""
+        try:
+            with open(pdb_file, 'r') as f:
+                pdb_lines = f.readlines()
+            
+            pdbqt_lines = []
+            for line in pdb_lines:
+                if line.startswith(('ATOM', 'HETATM')):
+                    # Convert PDB line to basic PDBQT format
+                    if len(line) >= 54:  # Minimum length for coordinates
+                        # Take only the standard PDB part (up to column 78) but remove element column
+                        # PDB format: columns 77-78 contain element symbol which we need to replace
+                        pdb_part = line[:76].rstrip()  # Stop before element column
+                        
+                        # Determine AutoDock atom type based on atom name
+                        atom_name = line[12:16].strip()
+                        if atom_name.startswith('C'):
+                            autodock_type = "C"
+                        elif atom_name.startswith('N'):
+                            autodock_type = "N"
+                        elif atom_name.startswith('O'):
+                            autodock_type = "O"
+                        elif atom_name.startswith('S'):
+                            autodock_type = "S"
+                        elif atom_name.startswith('P'):
+                            autodock_type = "P"
+                        elif atom_name.startswith('H'):
+                            autodock_type = "H"
+                        else:
+                            autodock_type = "C"  # Default to carbon
+                        
+                        # Format: PDB_part + spaces + charge + space + atom_type
+                        # Ensure proper spacing to column 79
+                        padding_needed = 76 - len(pdb_part)
+                        if padding_needed > 0:
+                            pdb_part += ' ' * padding_needed
+                        
+                        pdbqt_line = f"{pdb_part}  +0.000 {autodock_type}"
+                        pdbqt_lines.append(pdbqt_line + '\n')
+                else:
+                    # Skip header and other PDB-specific lines that Vina doesn't need
+                    # Only keep essential structural information
+                    if line.startswith(('REMARK', 'ROOT', 'ENDROOT', 'BRANCH', 'ENDBRANCH', 'TORSDOF')):
+                        pdbqt_lines.append(line)
+            
+            with open(pdbqt_file, 'w') as f:
+                f.writelines(pdbqt_lines)
+            
+            self.logger.info(f"Basic PDB to PDBQT conversion completed: {pdbqt_file}")
+            
+        except Exception as e:
+            self.logger.error(f"Simple PDB to PDBQT conversion failed: {e}")
+            raise
     
     def process_single_ligand(self, ligand_info: Tuple[str, Path], 
                             prepared_protein: str) -> Dict[str, Any]:
@@ -340,9 +503,13 @@ class BatchDockingPipeline:
             parsing_start = time.time()
             
             try:
+                # Ensure parser output directory exists
+                parser_output_dir = self.output_dir / "parsed_results" / ligand_name
+                parser_output_dir.mkdir(parents=True, exist_ok=True)
+                
                 parser = DockingResultsParser(
                     base_dir=str(ligand_output_dir),
-                    output_dir=str(self.output_dir / "parsed_results" / ligand_name)
+                    output_dir=str(parser_output_dir)
                 )
                 
                 summary_df = parser.generate_summary(ligand_name=ligand_name)
@@ -399,79 +566,72 @@ class BatchDockingPipeline:
         
         return result
     
-    def run_batch_pipeline(self, protein_file: str, ligand_input: str, 
-                          parallel: bool = True) -> Dict[str, Any]:
-        """Run the complete batch pipeline."""
+    def print_final_summary(self, results: List[Dict]):
+        print(f"\n{COLOR_INFO}{'='*60}{COLOR_RESET}")
+        print(f"{COLOR_INFO}BATCH PIPELINE SUMMARY{COLOR_RESET}")
+        print(f"{COLOR_INFO}{'='*60}{COLOR_RESET}")
+        headers = ["Ligand", "Status", "Prep", "Vina", "GNINA", "DiffDock", "Parse", "Time (s)", "Error"]
+        table = []
+        for r in results:
+            stages = r.get('stages', {})
+            row = [
+                r.get('ligand_name', ''),
+                pretty_status(r.get('success', False)),
+                pretty_status(stages.get('preparation', False)),
+                pretty_status(stages.get('vina', False)) if 'vina' in stages else '-',
+                pretty_status(stages.get('gnina', False)) if 'gnina' in stages else '-',
+                pretty_status(stages.get('diffdock', False)) if 'diffdock' in stages else '-',
+                pretty_status(stages.get('parsing', False)),
+                f"{r.get('total_time', 0):.1f}",
+                (next(iter(r.get('errors', {}).values()), '')[:40] if r.get('errors') else '')
+            ]
+            table.append(row)
+        if HAVE_TABULATE:
+            print(tabulate(table, headers=headers, tablefmt="fancy_grid"))
+        else:
+            # fallback: aligned text
+            col_widths = [max(len(str(x)) for x in col) for col in zip(*([headers]+table))]
+            fmt = '  '.join(f'{{:<{w}}}' for w in col_widths)
+            print(fmt.format(*headers))
+            for row in table:
+                print(fmt.format(*row))
+        print(f"{COLOR_INFO}{'='*60}{COLOR_RESET}\n")
+    
+    def run_batch_pipeline(self, protein_file: str, ligand_input: str, parallel: bool = True) -> Dict[str, Any]:
         pipeline_start = time.time()
-        
-        self.logger.info("="*80)
-        self.logger.info("STARTING BATCH MOLECULAR DOCKING PIPELINE")
-        self.logger.info("="*80)
-        
+        print(f"\n{COLOR_INFO}{'='*80}{COLOR_RESET}")
+        print(f"{COLOR_INFO}STARTING BATCH MOLECULAR DOCKING PIPELINE{COLOR_RESET}")
+        print(f"{COLOR_INFO}{'='*80}{COLOR_RESET}")
         try:
-            # Stage 0: Discover ligands
             ligands = self.discover_ligands(ligand_input)
             self.total_ligands = len(ligands)
-            
-            # Stage 1: Prepare protein once
             prepared_protein = self.prepare_protein_once(protein_file)
-            
-            # Stage 2: Process ligands in parallel or serial
             if parallel and self.config["parallel"]["max_workers"] > 1 and len(ligands) > 1:
-                self.logger.info(f"Processing {len(ligands)} ligands in parallel with {self.config['parallel']['max_workers']} workers")
-                
+                print(f"{COLOR_INFO}Processing {len(ligands)} ligands in parallel with {self.config['parallel']['max_workers']} workers{COLOR_RESET}")
                 with Pool(processes=self.config["parallel"]["max_workers"]) as pool:
                     process_func = partial(self.process_single_ligand, prepared_protein=prepared_protein)
                     results = pool.map(process_func, ligands)
             else:
-                self.logger.info(f"Processing {len(ligands)} ligands serially")
+                print(f"{COLOR_INFO}Processing {len(ligands)} ligands serially{COLOR_RESET}")
                 results = []
                 for ligand_info in ligands:
                     result = self.process_single_ligand(ligand_info, prepared_protein)
                     results.append(result)
-            
-            # Stage 3: Aggregate results
-            self.logger.info("Aggregating results and generating final summary")
-            
-            for result in results:
-                ligand_name = result['ligand_name']
-                if result['success']:
-                    self.ligand_results[ligand_name] = result
-                    self.successful_ligands += 1
-                else:
-                    self.failed_ligands[ligand_name] = result
-            
-            # Generate final summary
-            final_summary = self._generate_final_summary()
-            
-            # Save batch log
-            self._save_batch_log(results, pipeline_start)
-            
-            pipeline_time = time.time() - pipeline_start
-            success_rate = (self.successful_ligands / self.total_ligands) * 100
-            
-            self.logger.info("="*80)
-            self.logger.info("BATCH PIPELINE COMPLETED")
-            self.logger.info(f"Total ligands: {self.total_ligands}")
-            self.logger.info(f"Successful: {self.successful_ligands}")
-            self.logger.info(f"Failed: {len(self.failed_ligands)}")
-            self.logger.info(f"Success rate: {success_rate:.1f}%")
-            self.logger.info(f"Total time: {pipeline_time:.1f}s")
-            self.logger.info("="*80)
-            
+            # ... existing code ...
+            self.print_final_summary(results)
+            # ... existing code ...
             return {
                 'success': True,
                 'total_ligands': self.total_ligands,
                 'successful_ligands': self.successful_ligands,
                 'failed_ligands': len(self.failed_ligands),
-                'success_rate': success_rate,
-                'total_time': pipeline_time,
-                'final_summary_file': final_summary
+                'success_rate': (self.successful_ligands / self.total_ligands) * 100 if self.total_ligands > 0 else 0,
+                'total_time': time.time() - pipeline_start,
+                'final_summary_file': self._generate_final_summary()
             }
-            
         except Exception as e:
-            self.logger.error(f"Batch pipeline failed: {e}")
-            self.logger.debug(f"Traceback: {traceback.format_exc()}")
+            print(f"{COLOR_FAIL}Batch pipeline failed: {e}{COLOR_RESET}")
+            print(f"{COLOR_FAIL}{traceback.format_exc()}{COLOR_RESET}")
             return {
                 'success': False,
                 'error': str(e),
@@ -516,28 +676,6 @@ class BatchDockingPipeline:
         else:
             self.logger.warning("No successful results to aggregate")
             return ""
-    
-    def _save_batch_log(self, results: List[Dict], pipeline_start: float):
-        """Save detailed batch processing log."""
-        batch_log = {
-            'pipeline_start': pipeline_start,
-            'pipeline_end': time.time(),
-            'total_time': time.time() - pipeline_start,
-            'config': self.config,
-            'ligand_results': results,
-            'summary': {
-                'total_ligands': self.total_ligands,
-                'successful_ligands': self.successful_ligands,
-                'failed_ligands': len(self.failed_ligands),
-                'success_rate': (self.successful_ligands / self.total_ligands) * 100 if self.total_ligands > 0 else 0
-            }
-        }
-        
-        batch_log_file = self.output_dir / "batch_log.json"
-        with open(batch_log_file, 'w') as f:
-            json.dump(batch_log, f, indent=2, default=str)
-        
-        self.logger.info(f"Detailed batch log saved: {batch_log_file}")
 
 
 def main():

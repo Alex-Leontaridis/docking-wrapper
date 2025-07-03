@@ -304,3 +304,18 @@ subprocess.CalledProcessError: Command '['python3', 'DiffDock/inference.py', '--
 2025-07-02 23:46:47,756 INFO: Running Vina: vina --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --center_x 30.823885039775334 --center_y 29.373720810879 --center_z 16.502616884781943 --size_x 50.0 --size_y 52.0 --size_z 56.0 --out ./vina_output/vina_out.pdbqt
 2025-07-02 23:46:51,397 INFO: Vina docking completed successfully.
 2025-07-02 23:46:51,400 INFO: All selected backends completed successfully.
+2025-07-03 11:46:09,839 INFO: Starting docking wrapper
+2025-07-03 11:46:09,839 INFO: Box parameters not provided. Attempting to extract from protein file...
+2025-07-03 11:46:09,843 INFO: Strategy 1: Using bound ligand (28 atoms)
+2025-07-03 11:46:09,843 INFO: Extracted box center: (12.68, 23.39, 5.74), size: (22.15, 17.85, 14.97)
+2025-07-03 11:46:09,843 INFO: Running Vina: vina --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --center_x 12.677142857142858 --center_y 23.392642857142864 --center_z 5.736428571428574 --size_x 22.15 --size_y 17.851000000000003 --size_z 14.968 --out ./vina_output/vina_out.pdbqt
+2025-07-03 11:46:11,771 INFO: Vina docking completed successfully.
+2025-07-03 11:46:11,772 WARNING: GNINA binary not found in any standard location
+2025-07-03 11:46:11,772 INFO: Found DiffDock script at: DiffDock/inference.py
+2025-07-03 11:46:11,773 INFO: Running DiffDock: python3 DiffDock/inference.py --protein_ligand_csv /var/folders/23/5669rgw56fjdmfffc8rzw9_00000gn/T/tmpg76h2eod.csv --out_dir ./diffdock_output --inference_steps 20 --samples_per_complex 10 --batch_size 10
+2025-07-03 11:46:14,897 ERROR: [DiffDock] Docking failed: DiffDock failed with exit code 1: Traceback (most recent call last):
+  File "/Users/ioannisleontaridis/Desktop/convexia-docking-wrapper/DiffDock/inference.py", line 21, in <module>
+    from torch_geometric.loader import DataLoader
+ModuleNotFoundError: No module named 'torch_geometric'
+
+2025-07-03 11:46:14,898 INFO: Failed runs logged in ./logs/failed_runs.json

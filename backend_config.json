@@ -1,0 +1,18 @@
+{
+  "installation_date": "2025-07-03 (mock)",
+  "backends": {
+    "gnina": {
+      "installed": false,
+      "path": null,
+      "version": null,
+      "mock": true
+    },
+    "diffdock": {
+      "installed": false,
+      "path": null,
+      "version": null,
+      "mock": true
+    }
+  },
+  "note": "This is a mock configuration. Install backends with: python3 scripts/install_backends.py"
+}
