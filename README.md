@@ -1,4 +1,4 @@
-# Convexia Docking Wrapper
+# Docking Wrapper
 
 ## Overview
 This project provides a batch molecular docking pipeline supporting AutoDock Vina, GNINA, and DiffDock. It includes structure preparation, docking, and results parsing, with robust logging and error handling.
