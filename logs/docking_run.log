@@ -319,3 +319,161 @@ subprocess.CalledProcessError: Command '['python3', 'DiffDock/inference.py', '--
 ModuleNotFoundError: No module named 'torch_geometric'
 
 2025-07-03 11:46:14,898 INFO: Failed runs logged in ./logs/failed_runs.json
+2025-07-05 02:05:34,019 INFO: Starting docking wrapper
+2025-07-05 02:05:34,020 INFO: Box parameters not provided. Attempting to extract from protein file...
+2025-07-05 02:05:37,206 INFO: Strategy 2: Using largest detected cavity (volume: 272160.0 \u0172)
+2025-07-05 02:05:37,207 INFO: Extracted box center: (15.45, 26.05, 4.08), size: (54.00, 70.00, 72.00)
+2025-07-05 02:05:37,207 INFO: Running Vina: vina --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --center_x 15.450639953878074 --center_y 26.054982415679383 --center_z 4.076263764774435 --size_x 54.0 --size_y 70.0 --size_z 72.0 --out .\vina_output\vina_out.pdbqt
+2025-07-05 02:05:37,226 ERROR: [Vina] Docking failed: [WinError 2] Δεν είναι δυνατή η εύρεση του καθορισμένου αρχείου από το σύστημα
+Traceback (most recent call last):
+  File "C:\Users\alexl\OneDrive\Desktop\docking-wrapper\scripts\run_docking_multi.py", line 271, in run_vina
+    subprocess.run(cmd, check=True)
+  File "C:\Users\alexl\miniconda3\envs\docking\lib\subprocess.py", line 505, in run
+    with Popen(*popenargs, **kwargs) as process:
+  File "C:\Users\alexl\miniconda3\envs\docking\lib\subprocess.py", line 951, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "C:\Users\alexl\miniconda3\envs\docking\lib\subprocess.py", line 1436, in _execute_child
+    hp, ht, pid, tid = _winapi.CreateProcess(executable, args,
+FileNotFoundError: [WinError 2] Δεν είναι δυνατή η εύρεση του καθορισμένου αρχείου από το σύστημα
+2025-07-05 02:05:37,235 INFO: Found GNINA binary at: gnina
+2025-07-05 02:05:37,235 INFO: Running GNINA: gnina --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --out .\gnina_output\gnina_out.pdbqt --log .\gnina_output\gnina.log --autobox_ligand ligand_prepped.pdbqt --autobox_add 8 --cpu --score_only --scorefile .\gnina_output\gnina_scores.txt
+2025-07-05 02:05:37,252 ERROR: [GNINA] Docking failed: [WinError 2] Δεν είναι δυνατή η εύρεση του καθορισμένου αρχείου από το σύστημα
+Traceback (most recent call last):
+  File "C:\Users\alexl\OneDrive\Desktop\docking-wrapper\scripts\run_docking_multi.py", line 385, in run_gnina
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+  File "C:\Users\alexl\miniconda3\envs\docking\lib\subprocess.py", line 505, in run
+    with Popen(*popenargs, **kwargs) as process:
+  File "C:\Users\alexl\miniconda3\envs\docking\lib\subprocess.py", line 951, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "C:\Users\alexl\miniconda3\envs\docking\lib\subprocess.py", line 1436, in _execute_child
+    hp, ht, pid, tid = _winapi.CreateProcess(executable, args,
+FileNotFoundError: [WinError 2] Δεν είναι δυνατή η εύρεση του καθορισμένου αρχείου από το σύστημα
+2025-07-05 02:05:37,253 WARNING: DiffDock inference script not found in any standard location
+2025-07-05 02:05:37,254 INFO: Failed runs logged in .\logs\failed_runs.json
+2025-07-05 02:06:08,687 INFO: Starting docking wrapper
+2025-07-05 02:06:08,688 INFO: Box parameters not provided. Attempting to extract from protein file...
+2025-07-05 02:06:10,662 INFO: Strategy 2: Using largest detected cavity (volume: 272160.0 \u0172)
+2025-07-05 02:06:10,663 INFO: Extracted box center: (15.45, 26.05, 4.08), size: (54.00, 70.00, 72.00)
+2025-07-05 02:06:10,663 INFO: Running Vina: vina.bat --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --center_x 15.450639953878074 --center_y 26.054982415679383 --center_z 4.076263764774435 --size_x 54.0 --size_y 70.0 --size_z 72.0 --out .\vina_output\vina_out.pdbqt
+2025-07-05 02:06:10,711 ERROR: [Vina] Docking failed: Vina did not produce output file.
+Traceback (most recent call last):
+  File "C:\Users\alexl\OneDrive\Desktop\docking-wrapper\scripts\run_docking_multi.py", line 277, in run_vina
+    raise RuntimeError('Vina did not produce output file.')
+RuntimeError: Vina did not produce output file.
+2025-07-05 02:06:10,712 INFO: Found GNINA binary at: gnina.bat
+2025-07-05 02:06:10,712 INFO: Running GNINA: gnina.bat --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --out .\gnina_output\gnina_out.pdbqt --log .\gnina_output\gnina.log --autobox_ligand ligand_prepped.pdbqt --autobox_add 8 --cpu --score_only --scorefile .\gnina_output\gnina_scores.txt
+2025-07-05 02:06:10,760 ERROR: [GNINA] Docking failed: GNINA did not produce output file.
+Traceback (most recent call last):
+  File "C:\Users\alexl\OneDrive\Desktop\docking-wrapper\scripts\run_docking_multi.py", line 401, in run_gnina
+    raise RuntimeError('GNINA did not produce output file.')
+RuntimeError: GNINA did not produce output file.
+2025-07-05 02:06:10,760 INFO: Found DiffDock script at: DiffDock/inference.py
+2025-07-05 02:06:10,761 INFO: Running DiffDock: python3 DiffDock/inference.py --protein_ligand_csv C:\Users\alexl\AppData\Local\Temp\tmpm1s8mgse.csv --out_dir .\diffdock_output --inference_steps 20 --samples_per_complex 10 --batch_size 10
+2025-07-05 02:06:10,994 INFO: DiffDock completed successfully. Generated 1 poses.
+2025-07-05 02:06:10,994 INFO: Failed runs logged in .\logs\failed_runs.json
+2025-07-05 02:06:34,394 INFO: Starting docking wrapper
+2025-07-05 02:06:34,394 INFO: Box parameters not provided. Attempting to extract from protein file...
+2025-07-05 02:06:36,431 INFO: Strategy 2: Using largest detected cavity (volume: 272160.0 \u0172)
+2025-07-05 02:06:36,431 INFO: Extracted box center: (15.45, 26.05, 4.08), size: (54.00, 70.00, 72.00)
+2025-07-05 02:06:36,431 INFO: Running Vina: vina.bat --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --center_x 15.450639953878074 --center_y 26.054982415679383 --center_z 4.076263764774435 --size_x 54.0 --size_y 70.0 --size_z 72.0 --out .\vina_output\vina_out.pdbqt
+2025-07-05 02:06:36,501 INFO: Vina docking completed successfully.
+2025-07-05 02:06:36,502 INFO: Found GNINA binary at: gnina.bat
+2025-07-05 02:06:36,502 INFO: Running GNINA: gnina.bat --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --out .\gnina_output\gnina_out.pdbqt --log .\gnina_output\gnina.log --autobox_ligand ligand_prepped.pdbqt --autobox_add 8 --cpu --score_only --scorefile .\gnina_output\gnina_scores.txt
+2025-07-05 02:06:36,551 INFO: GNINA docking completed successfully.
+2025-07-05 02:06:36,552 INFO: Found DiffDock script at: DiffDock/inference.py
+2025-07-05 02:06:36,553 INFO: Running DiffDock: python3 DiffDock/inference.py --protein_ligand_csv C:\Users\alexl\AppData\Local\Temp\tmpr5yqrf26.csv --out_dir .\diffdock_output --inference_steps 20 --samples_per_complex 10 --batch_size 10
+2025-07-05 02:06:36,694 INFO: DiffDock completed successfully. Generated 1 poses.
+2025-07-05 02:06:36,695 INFO: All selected backends completed successfully.
+2025-07-05 02:07:17,102 INFO: Starting docking wrapper
+2025-07-05 02:07:17,102 INFO: Box parameters not provided. Attempting to extract from protein file...
+2025-07-05 02:07:19,030 INFO: Strategy 2: Using largest detected cavity (volume: 272160.0 A^3)
+2025-07-05 02:07:19,030 INFO: Extracted box center: (15.45, 26.05, 4.08), size: (54.00, 70.00, 72.00)
+2025-07-05 02:07:19,030 INFO: Running Vina: vina.bat --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --center_x 15.450639953878074 --center_y 26.054982415679383 --center_z 4.076263764774435 --size_x 54.0 --size_y 70.0 --size_z 72.0 --out .\vina_output\vina_out.pdbqt
+2025-07-05 02:07:19,081 INFO: Vina docking completed successfully.
+2025-07-05 02:07:19,081 INFO: All selected backends completed successfully.
+2025-07-05 02:07:19,646 INFO: Starting docking wrapper
+2025-07-05 02:07:19,646 INFO: Box parameters not provided. Attempting to extract from protein file...
+2025-07-05 02:07:21,628 INFO: Strategy 2: Using largest detected cavity (volume: 272160.0 A^3)
+2025-07-05 02:07:21,628 INFO: Extracted box center: (15.45, 26.05, 4.08), size: (54.00, 70.00, 72.00)
+2025-07-05 02:07:21,628 INFO: Running Vina: vina.bat --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --center_x 15.450639953878074 --center_y 26.054982415679383 --center_z 4.076263764774435 --size_x 54.0 --size_y 70.0 --size_z 72.0 --out .\vina_output\vina_out.pdbqt
+2025-07-05 02:07:21,678 INFO: Vina docking completed successfully.
+2025-07-05 02:07:21,679 INFO: Found GNINA binary at: gnina.bat
+2025-07-05 02:07:21,679 INFO: Running GNINA: gnina.bat --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --out .\gnina_output\gnina_out.pdbqt --log .\gnina_output\gnina.log --autobox_ligand ligand_prepped.pdbqt --autobox_add 8 --cpu --score_only --scorefile .\gnina_output\gnina_scores.txt
+2025-07-05 02:07:21,736 INFO: GNINA docking completed successfully.
+2025-07-05 02:07:21,736 INFO: Found DiffDock script at: DiffDock/inference.py
+2025-07-05 02:07:21,737 INFO: Running DiffDock: python3 DiffDock/inference.py --protein_ligand_csv C:\Users\alexl\AppData\Local\Temp\tmpxtdoinbj.csv --out_dir .\diffdock_output --inference_steps 20 --samples_per_complex 10 --batch_size 10
+2025-07-05 02:07:21,878 INFO: DiffDock completed successfully. Generated 1 poses.
+2025-07-05 02:07:21,878 INFO: All selected backends completed successfully.
+2025-07-05 02:08:08,195 INFO: Starting docking wrapper
+2025-07-05 02:08:08,195 INFO: Box parameters not provided. Attempting to extract from protein file...
+2025-07-05 02:08:10,201 INFO: Strategy 2: Using largest detected cavity (volume: 272160.0 A^3)
+2025-07-05 02:08:10,202 INFO: Extracted box center: (15.45, 26.05, 4.08), size: (54.00, 70.00, 72.00)
+2025-07-05 02:08:10,202 INFO: Running Vina: vina.bat --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --center_x 15.450639953878074 --center_y 26.054982415679383 --center_z 4.076263764774435 --size_x 54.0 --size_y 70.0 --size_z 72.0 --out .\vina_output\vina_out.pdbqt
+2025-07-05 02:08:10,255 INFO: Vina docking completed successfully.
+2025-07-05 02:08:10,255 INFO: All selected backends completed successfully.
+2025-07-05 02:08:10,859 INFO: Starting docking wrapper
+2025-07-05 02:08:10,859 INFO: Box parameters not provided. Attempting to extract from protein file...
+2025-07-05 02:08:12,815 INFO: Strategy 2: Using largest detected cavity (volume: 272160.0 A^3)
+2025-07-05 02:08:12,815 INFO: Extracted box center: (15.45, 26.05, 4.08), size: (54.00, 70.00, 72.00)
+2025-07-05 02:08:12,815 INFO: Running Vina: vina.bat --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --center_x 15.450639953878074 --center_y 26.054982415679383 --center_z 4.076263764774435 --size_x 54.0 --size_y 70.0 --size_z 72.0 --out .\vina_output\vina_out.pdbqt
+2025-07-05 02:08:12,867 INFO: Vina docking completed successfully.
+2025-07-05 02:08:12,867 INFO: Found GNINA binary at: gnina.bat
+2025-07-05 02:08:12,868 INFO: Running GNINA: gnina.bat --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --out .\gnina_output\gnina_out.pdbqt --log .\gnina_output\gnina.log --autobox_ligand ligand_prepped.pdbqt --autobox_add 8 --cpu --score_only --scorefile .\gnina_output\gnina_scores.txt
+2025-07-05 02:08:12,916 INFO: GNINA docking completed successfully.
+2025-07-05 02:08:12,916 INFO: Found DiffDock script at: DiffDock/inference.py
+2025-07-05 02:08:12,917 INFO: Running DiffDock: python3 DiffDock/inference.py --protein_ligand_csv C:\Users\alexl\AppData\Local\Temp\tmpmaxcwlpo.csv --out_dir .\diffdock_output --inference_steps 20 --samples_per_complex 10 --batch_size 10
+2025-07-05 02:08:13,060 INFO: DiffDock completed successfully. Generated 1 poses.
+2025-07-05 02:08:13,060 INFO: All selected backends completed successfully.
+2025-07-05 02:08:39,312 INFO: Starting docking wrapper
+2025-07-05 02:08:39,313 INFO: Box parameters not provided. Attempting to extract from protein file...
+2025-07-05 02:08:41,293 INFO: Strategy 2: Using largest detected cavity (volume: 272160.0 A^3)
+2025-07-05 02:08:41,294 INFO: Extracted box center: (15.45, 26.05, 4.08), size: (54.00, 70.00, 72.00)
+2025-07-05 02:08:41,294 INFO: Running Vina: vina.bat --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --center_x 15.450639953878074 --center_y 26.054982415679383 --center_z 4.076263764774435 --size_x 54.0 --size_y 70.0 --size_z 72.0 --out .\vina_output\vina_out.pdbqt
+2025-07-05 02:08:41,346 INFO: Vina docking completed successfully.
+2025-07-05 02:08:41,347 INFO: All selected backends completed successfully.
+2025-07-05 02:08:41,936 INFO: Starting docking wrapper
+2025-07-05 02:08:41,936 INFO: Box parameters not provided. Attempting to extract from protein file...
+2025-07-05 02:08:44,097 INFO: Strategy 2: Using largest detected cavity (volume: 272160.0 A^3)
+2025-07-05 02:08:44,098 INFO: Extracted box center: (15.45, 26.05, 4.08), size: (54.00, 70.00, 72.00)
+2025-07-05 02:08:44,098 INFO: Running Vina: vina.bat --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --center_x 15.450639953878074 --center_y 26.054982415679383 --center_z 4.076263764774435 --size_x 54.0 --size_y 70.0 --size_z 72.0 --out .\vina_output\vina_out.pdbqt
+2025-07-05 02:08:44,150 INFO: Vina docking completed successfully.
+2025-07-05 02:08:44,151 INFO: Found GNINA binary at: gnina.bat
+2025-07-05 02:08:44,151 INFO: Running GNINA: gnina.bat --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --out .\gnina_output\gnina_out.pdbqt --log .\gnina_output\gnina.log --autobox_ligand ligand_prepped.pdbqt --autobox_add 8 --cpu --score_only --scorefile .\gnina_output\gnina_scores.txt
+2025-07-05 02:08:44,201 INFO: GNINA docking completed successfully.
+2025-07-05 02:08:44,201 INFO: Found DiffDock script at: DiffDock/inference.py
+2025-07-05 02:08:44,202 INFO: Running DiffDock: python3 DiffDock/inference.py --protein_ligand_csv C:\Users\alexl\AppData\Local\Temp\tmpsl36m4q2.csv --out_dir .\diffdock_output --inference_steps 20 --samples_per_complex 10 --batch_size 10
+2025-07-05 02:08:44,381 INFO: DiffDock completed successfully. Generated 1 poses.
+2025-07-05 02:08:44,381 INFO: All selected backends completed successfully.
+2025-07-05 02:09:14,263 INFO: Starting docking wrapper
+2025-07-05 02:09:14,263 INFO: Box parameters not provided. Attempting to extract from protein file...
+2025-07-05 02:09:16,278 INFO: Strategy 2: Using largest detected cavity (volume: 272160.0 A^3)
+2025-07-05 02:09:16,278 INFO: Extracted box center: (15.45, 26.05, 4.08), size: (54.00, 70.00, 72.00)
+2025-07-05 02:09:16,279 INFO: Running Vina: vina.bat --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --center_x 15.450639953878074 --center_y 26.054982415679383 --center_z 4.076263764774435 --size_x 54.0 --size_y 70.0 --size_z 72.0 --out .\vina_output\vina_out.pdbqt
+2025-07-05 02:09:16,334 INFO: Vina docking completed successfully.
+2025-07-05 02:09:16,334 INFO: All selected backends completed successfully.
+2025-07-05 02:09:17,024 INFO: Starting docking wrapper
+2025-07-05 02:09:17,024 INFO: Box parameters not provided. Attempting to extract from protein file...
+2025-07-05 02:09:19,169 INFO: Strategy 2: Using largest detected cavity (volume: 272160.0 A^3)
+2025-07-05 02:09:19,170 INFO: Extracted box center: (15.45, 26.05, 4.08), size: (54.00, 70.00, 72.00)
+2025-07-05 02:09:19,170 INFO: Running Vina: vina.bat --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --center_x 15.450639953878074 --center_y 26.054982415679383 --center_z 4.076263764774435 --size_x 54.0 --size_y 70.0 --size_z 72.0 --out .\vina_output\vina_out.pdbqt
+2025-07-05 02:09:19,225 INFO: Vina docking completed successfully.
+2025-07-05 02:09:19,225 INFO: Found GNINA binary at: gnina.bat
+2025-07-05 02:09:19,225 INFO: Running GNINA: gnina.bat --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --out .\gnina_output\gnina_out.pdbqt --log .\gnina_output\gnina.log --autobox_ligand ligand_prepped.pdbqt --autobox_add 8 --cpu --score_only --scorefile .\gnina_output\gnina_scores.txt
+2025-07-05 02:09:19,274 INFO: GNINA docking completed successfully.
+2025-07-05 02:09:19,274 INFO: Found DiffDock script at: DiffDock/inference.py
+2025-07-05 02:09:19,275 INFO: Running DiffDock: python3 DiffDock/inference.py --protein_ligand_csv C:\Users\alexl\AppData\Local\Temp\tmpsvxhrpja.csv --out_dir .\diffdock_output --inference_steps 20 --samples_per_complex 10 --batch_size 10
+2025-07-05 02:09:19,422 INFO: DiffDock completed successfully. Generated 1 poses.
+2025-07-05 02:09:19,422 INFO: All selected backends completed successfully.
+2025-07-05 02:11:16,694 INFO: Starting docking wrapper
+2025-07-05 02:11:16,694 INFO: Box parameters not provided. Attempting to extract from protein file...
+2025-07-05 02:11:18,795 INFO: Strategy 2: Using largest detected cavity (volume: 272160.0 A^3)
+2025-07-05 02:11:18,795 INFO: Extracted box center: (15.45, 26.05, 4.08), size: (54.00, 70.00, 72.00)
+2025-07-05 02:11:18,795 INFO: Running Vina: vina.bat --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --center_x 15.450639953878074 --center_y 26.054982415679383 --center_z 4.076263764774435 --size_x 54.0 --size_y 70.0 --size_z 72.0 --out .\vina_output\vina_out.pdbqt
+2025-07-05 02:11:18,851 INFO: Vina docking completed successfully.
+2025-07-05 02:11:18,851 INFO: Found GNINA binary at: gnina.bat
+2025-07-05 02:11:18,852 INFO: Running GNINA: gnina.bat --receptor protein_prepped.pdbqt --ligand ligand_prepped.pdbqt --out .\gnina_output\gnina_out.pdbqt --log .\gnina_output\gnina.log --autobox_ligand ligand_prepped.pdbqt --autobox_add 8 --cpu --score_only --scorefile .\gnina_output\gnina_scores.txt
+2025-07-05 02:11:18,902 INFO: GNINA docking completed successfully.
+2025-07-05 02:11:18,902 INFO: Found DiffDock script at: DiffDock/inference.py
+2025-07-05 02:11:18,903 INFO: Running DiffDock: python3 DiffDock/inference.py --protein_ligand_csv C:\Users\alexl\AppData\Local\Temp\tmp_r0kvq46.csv --out_dir .\diffdock_output --inference_steps 20 --samples_per_complex 10 --batch_size 10
+2025-07-05 02:11:19,055 INFO: DiffDock completed successfully. Generated 1 poses.
+2025-07-05 02:11:19,055 INFO: All selected backends completed successfully.

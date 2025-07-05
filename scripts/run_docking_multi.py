@@ -119,7 +119,7 @@ def extract_box_from_protein(protein_path):
             best_cavity = max(cavities, key=lambda c: c['volume'])
             center = best_cavity['center']
             size = best_cavity['size']
-            logging.info(f'Strategy 2: Using largest detected cavity (volume: {best_cavity["volume"]:.1f} Ų)')
+            logging.info(f'Strategy 2: Using largest detected cavity (volume: {best_cavity["volume"]:.1f} A^3)')
             return tuple(center) + tuple(size)
     
     # Strategy 3: Geometric center of protein as fallback
@@ -248,7 +248,11 @@ def find_protein_cavities(protein_coords, grid_spacing=2.0, probe_radius=1.4):
 
 def run_vina(protein, ligand, output_dir, box_params):
     """Run AutoDock Vina CLI."""
-    vina_bin = 'vina'  # Assumes vina is in PATH
+    # Use Windows batch file if on Windows
+    if os.name == 'nt':  # Windows
+        vina_bin = 'vina.bat'  # Use Windows batch file
+    else:
+        vina_bin = 'vina'  # Assumes vina is in PATH
     vina_out = os.path.join(output_dir, VINA_OUT, 'vina_out.pdbqt')
     status = {'success': False, 'error': None, 'time': None}
     start = time.time()
@@ -292,14 +296,23 @@ def load_backend_config():
 
 def find_gnina_binary():
     """Find GNINA binary in various possible locations."""
-    possible_paths = [
-        'gnina',  # In PATH
-        '/usr/local/bin/gnina',  # Standard installation
-        '/opt/conda/envs/docking/bin/gnina',  # Conda environment
-        './gnina',  # Current directory
-        os.path.expanduser('~/gnina'),  # User home
-        '/usr/bin/gnina',  # System binary
-    ]
+    # Use Windows batch file if on Windows
+    if os.name == 'nt':  # Windows
+        possible_paths = [
+            'gnina.bat',  # Windows batch file
+            'gnina',  # In PATH
+            './gnina.bat',  # Current directory
+            './gnina',  # Current directory
+        ]
+    else:
+        possible_paths = [
+            'gnina',  # In PATH
+            '/usr/local/bin/gnina',  # Standard installation
+            '/opt/conda/envs/docking/bin/gnina',  # Conda environment
+            './gnina',  # Current directory
+            os.path.expanduser('~/gnina'),  # User home
+            '/usr/bin/gnina',  # System binary
+        ]
     
     for path in possible_paths:
         if shutil.which(path):

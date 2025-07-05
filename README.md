@@ -74,6 +74,57 @@ python3 scripts/parse_and_score_results.py --batch_dirs out1/ out2/ --output_dir
 
 ---
 
+## Enhanced Model & Analysis Commands
+
+The following commands use the new ML-based docking, scoring, and analysis scripts. These are not yet integrated into the main batch pipeline, but can be run individually or orchestrated via custom scripts.
+
+### 1. EquiBind Pose Prediction
+```bash
+python3 scripts/run_equibind.py --protein inputs/protein.pdb --ligand inputs/ligands/aspirin.sdf --output outputs/equibind/
+```
+
+### 2. NeuralPLexer-2 Pose Prediction
+```bash
+python3 scripts/run_neuralplexer.py --protein inputs/protein.pdb --ligand inputs/ligands/aspirin.sdf --output outputs/neuralplexer/
+```
+
+### 3. UMol Structure-Free Pose Prediction
+```bash
+python3 scripts/run_umol.py --protein inputs/protein.fasta --ligand inputs/ligands/aspirin.sdf --output outputs/umol/
+```
+
+### 4. Structure Prediction (AlphaFold2/OpenFold/ESMFold)
+```bash
+python3 scripts/run_structure_predictor.py --protein inputs/protein.fasta --output_dir outputs/structures/
+```
+
+### 5. Binding Affinity Prediction (Boltz2)
+```bash
+python3 scripts/run_boltz2.py --protein inputs/protein.fasta --ligand inputs/ligands/aspirin.smi --output outputs/affinity.json
+```
+
+### 6. Protein-Ligand Interaction Analysis (PLIP/RDKit)
+```bash
+python3 scripts/extract_interactions.py --pdb outputs/equibind/equibind_pose.pdb --ligand LIG --protein PROT --output_dir outputs/interactions/
+```
+
+### 7. Druggability Scoring (fpocket)
+```bash
+python3 scripts/run_druggability.py --protein outputs/equibind/equibind_pose.pdb --output outputs/druggability.json
+```
+
+### 8. Consensus Analysis (RMSD-based)
+```bash
+python3 scripts/model_consensus.py --poses outputs/equibind/equibind_pose.pdb outputs/neuralplexer/neuralplexer_pose.pdb outputs/umol/umol_pose.pdb --output outputs/consensus.json --ligand_id LIG1
+```
+
+### 9. Composite Confidence Scoring
+```bash
+python3 scripts/compute_confidence.py --consensus_json outputs/consensus.json --druggability_json outputs/druggability.json --affinity_json outputs/affinity.json --interaction_json outputs/interactions/LIG_PROT.json --output outputs/confidence.json --ligand_id LIG1
+```
+
+---
+
 ## Dummy Testing for CI/Review
 
 This project includes **dummy scripts** for GNINA and DiffDock to allow reviewers and CI systems to test the pipeline without the real binaries:

@@ -697,3 +697,11 @@
 2025-07-03 03:01:44,407 | INFO     | BatchPipeline        | Success rate: 100.0%
 2025-07-03 03:01:44,407 | INFO     | BatchPipeline        | Total time: 7.1s
 2025-07-03 03:01:44,407 | INFO     | BatchPipeline        | ================================================================================
+2025-07-05 02:06:46,881 | INFO     | BatchPipeline        | Discovered 3 ligand(s) to process
+2025-07-05 02:06:46,882 | INFO     | BatchPipeline        | Preparing protein structure: inputs/protein.pdb
+2025-07-05 02:06:46,883 | INFO     | BatchPipeline        | Preparing protein: cleaning, adding hydrogens, assigning Gasteiger charges, converting to PDBQT...
+2025-07-05 02:06:46,883 | INFO     | BatchPipeline        | MGLTools not found. Using simple PDB to PDBQT conversion...
+2025-07-05 02:06:46,890 | INFO     | BatchPipeline        | Basic PDB to PDBQT conversion completed: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-05 02:06:46,890 | INFO     | BatchPipeline        | Basic PDB to PDBQT conversion completed: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-05 02:06:46,891 | INFO     | BatchPipeline        | Protein prepared: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-05 02:06:51,938 | WARNING  | BatchPipeline        | No successful results to aggregate

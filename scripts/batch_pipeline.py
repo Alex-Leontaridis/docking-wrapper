@@ -33,7 +33,7 @@ except ImportError:
     COLOR_OK = COLOR_FAIL = COLOR_WARN = COLOR_INFO = COLOR_RESET = ''
 
 def pretty_status(success):
-    return f"{COLOR_OK}✓{COLOR_RESET}" if success else f"{COLOR_FAIL}✗{COLOR_RESET}"
+    return f"{COLOR_OK}OK{COLOR_RESET}" if success else f"{COLOR_FAIL}FAIL{COLOR_RESET}"
 
 def pretty_stage(stage):
     return f"{COLOR_INFO}{stage}{COLOR_RESET}"
@@ -606,7 +606,11 @@ class BatchDockingPipeline:
             ]
             table.append(row)
         if HAVE_TABULATE:
-            print(tabulate(table, headers=headers, tablefmt="fancy_grid"))
+            try:
+                print(tabulate(table, headers=headers, tablefmt="fancy_grid"))
+            except UnicodeEncodeError:
+                # Fallback to simple table format if Unicode issues occur
+                print(tabulate(table, headers=headers, tablefmt="simple"))
         else:
             # fallback: aligned text
             col_widths = [max(len(str(x)) for x in col) for col in zip(*([headers]+table))]
@@ -636,9 +640,7 @@ class BatchDockingPipeline:
                 for ligand_info in ligands:
                     result = self.process_single_ligand(ligand_info, prepared_protein)
                     results.append(result)
-            # ... existing code ...
             self.print_final_summary(results)
-            # ... existing code ...
             return {
                 'success': True,
                 'total_ligands': self.total_ligands,

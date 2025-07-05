@@ -1,0 +1,21 @@
+2025-07-05 02:08:14,654 - INFO - Starting results parsing...
+2025-07-05 02:08:14,654 - INFO - Parsed 1 Vina poses from vina_output\vina_out.pdbqt
+2025-07-05 02:08:14,655 - INFO - Parsed 0 GNINA poses
+2025-07-05 02:08:14,656 - WARNING - Failed to parse confidence file diffdock_output\diffdock_confidence.txt: could not convert string to float: 'complex_name,confidence'
+2025-07-05 02:08:14,656 - INFO - Parsed 0 DiffDock poses
+2025-07-05 02:08:14,657 - INFO - Generated summary with 1 total poses
+2025-07-05 02:08:14,659 - INFO - Results saved to: test_outputs\summary.csv
+2025-07-05 02:08:45,963 - INFO - Starting results parsing...
+2025-07-05 02:08:45,964 - INFO - Parsed 1 Vina poses from vina_output\vina_out.pdbqt
+2025-07-05 02:08:45,964 - INFO - Parsed 0 GNINA poses
+2025-07-05 02:08:45,966 - WARNING - Failed to parse confidence file diffdock_output\diffdock_confidence.txt: could not convert string to float: 'complex_name,confidence'
+2025-07-05 02:08:45,966 - INFO - Parsed 0 DiffDock poses
+2025-07-05 02:08:45,967 - INFO - Generated summary with 1 total poses
+2025-07-05 02:08:45,969 - INFO - Results saved to: test_outputs\summary.csv
+2025-07-05 02:09:21,111 - INFO - Starting results parsing...
+2025-07-05 02:09:21,112 - INFO - Parsed 1 Vina poses from vina_output\vina_out.pdbqt
+2025-07-05 02:09:21,112 - INFO - Parsed 0 GNINA poses
+2025-07-05 02:09:21,114 - WARNING - Failed to parse confidence file diffdock_output\diffdock_confidence.txt: could not convert string to float: 'complex_name,confidence'
+2025-07-05 02:09:21,114 - INFO - Parsed 0 DiffDock poses
+2025-07-05 02:09:21,115 - INFO - Generated summary with 1 total poses
+2025-07-05 02:09:21,118 - INFO - Results saved to: test_outputs\summary.csv
