@@ -1,0 +1,27 @@
+{
+  "tools": {
+    "equibind": {
+      "repo_path": "EquiBind",
+      "conda_env": "equibind",
+      "max_retries": 3,
+      "timeout_seconds": 300,
+      "memory_limit_gb": 8,
+      "cpu_limit_percent": 80,
+      "log_level": "INFO",
+      "health_check_interval": 30,
+      "output_formats": [".sdf", ".pdb"],
+      "supported_ligand_formats": [".mol2", ".sdf", ".pdbqt", ".pdb"],
+      "supported_protein_formats": [".pdb"]
+    }
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    "file": "logs/equibind.log"
+  },
+  "security": {
+    "max_file_size_mb": 100,
+    "allowed_paths": ["inputs/", "outputs/", "temp/"],
+    "validate_file_content": true
+  }
+} 
