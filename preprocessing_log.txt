@@ -748,3 +748,14 @@ lts
 2025-07-05 02:11:42,743 [INFO] [ligand2] Parsing completed, found 1 poses
 2025-07-05 02:11:42,743 [INFO] [ligand2] Processing completed successfully in 1.7s
 2025-07-05 02:11:42,767 [WARNING] No successful results to aggregate
+2025-07-08 11:20:04,646 [WARNING] MGLTools pythonsh not found
+2025-07-08 11:20:15,776 [WARNING] MGLTools pythonsh not found
+2025-07-08 11:20:15,778 [INFO] Starting structure preparation...
+2025-07-08 11:20:15,778 [INFO] Preparing protein: cleaning, adding hydrogens, assigning Gasteiger charges, converting to PDBQT...
+2025-07-08 11:20:15,778 [INFO] MGLTools not found. Using meeko for basic protein preparation...
+2025-07-08 11:20:16,030 [ERROR] Required packages not available for protein preparation: No module named 'rdkit.six'
+2025-07-08 11:20:16,030 [ERROR] Please install MGLTools or ensure BioPython and meeko are available
+2025-07-08 11:32:37,122 [WARNING] MGLTools pythonsh not found
+2025-07-08 11:35:51,125 [INFO] Basic PDB to PDBQT conversion completed: test_protein.pdbqt
+2025-07-08 11:39:59,961 [INFO] Tool detection results:
+2025-07-08 11:39:59,979 [WARNING] MGLTools pythonsh not found

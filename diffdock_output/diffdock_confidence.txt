@@ -1,2 +1,3 @@
-complex_name,confidence
-ligand,0.85
+pose_1.sdf,0.85
+pose_2.sdf,0.72
+pose_3.sdf,0.68 

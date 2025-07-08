@@ -6,6 +6,11 @@ import logging
 import subprocess
 from rdkit import Chem
 from rdkit.Chem import AllChem
+import numpy as np
+
+# Add current directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import config
 
 try:
     from meeko import MoleculePreparation
@@ -141,58 +146,60 @@ def clean_pdbqt_formatting(pdbqt_file):
 
 
 def _simple_pdb_to_pdbqt(pdb_file, pdbqt_file):
-    """Simple PDB to PDBQT conversion as last resort fallback."""
+    """Improved PDB to PDBQT conversion using RDKit for atom typing and Gasteiger charge calculation."""
     try:
-        with open(pdb_file, 'r') as f:
-            pdb_lines = f.readlines()
+        # Load the PDB file as an RDKit molecule
+        mol = Chem.MolFromPDBFile(pdb_file, removeHs=False)
+        if mol is None:
+            logging.error(f"RDKit failed to load protein from {pdb_file}")
+            raise ValueError("Invalid PDB file for fallback conversion")
+        
+        # Add hydrogens if not present
+        mol = Chem.AddHs(mol)
+        # Compute Gasteiger charges
+        AllChem.ComputeGasteigerCharges(mol)
+        
+        # Map atomic numbers to basic AutoDock types
+        autodock_type_map = {
+            6: "C",   # Carbon
+            7: "N",   # Nitrogen
+            8: "O",   # Oxygen
+            16: "S",  # Sulfur
+            15: "P",  # Phosphorus
+            1: "H",   # Hydrogen
+        }
         
         pdbqt_lines = []
-        for line in pdb_lines:
-            if line.startswith(('ATOM', 'HETATM')):
-                # Convert PDB line to basic PDBQT format
-                if len(line) >= 54:  # Minimum length for coordinates
-                    # Take only the standard PDB part (up to column 78) but remove element column
-                    # PDB format: columns 77-78 contain element symbol which we need to replace
-                    pdb_part = line[:76].rstrip()  # Stop before element column
-                    
-                    # Determine AutoDock atom type based on atom name
-                    atom_name = line[12:16].strip()
-                    if atom_name.startswith('C'):
-                        autodock_type = "C"
-                    elif atom_name.startswith('N'):
-                        autodock_type = "N"
-                    elif atom_name.startswith('O'):
-                        autodock_type = "O"
-                    elif atom_name.startswith('S'):
-                        autodock_type = "S"
-                    elif atom_name.startswith('P'):
-                        autodock_type = "P"
-                    elif atom_name.startswith('H'):
-                        autodock_type = "H"
-                    else:
-                        autodock_type = "C"  # Default to carbon
-                    
-                    # Format: PDB_part + spaces + charge + space + atom_type
-                    # Ensure proper spacing to column 79
-                    padding_needed = 76 - len(pdb_part)
-                    if padding_needed > 0:
-                        pdb_part += ' ' * padding_needed
-                    
-                    pdbqt_line = f"{pdb_part}  +0.000 {autodock_type}"
-                    pdbqt_lines.append(pdbqt_line + '\n')
-            else:
-                # Skip header and other PDB-specific lines that Vina doesn't need
-                # Only keep essential structural information
-                if line.startswith(('REMARK', 'ROOT', 'ENDROOT', 'BRANCH', 'ENDBRANCH', 'TORSDOF')):
-                    pdbqt_lines.append(line)
-        
+        atom_idx = 1
+        for atom in mol.GetAtoms():
+            pos = mol.GetConformer().GetAtomPosition(atom.GetIdx())
+            atom_name = atom.GetSymbol()
+            res_name = atom.GetPDBResidueInfo().GetResidueName() if atom.GetPDBResidueInfo() else "UNK"
+            chain_id = atom.GetPDBResidueInfo().GetChainId() if atom.GetPDBResidueInfo() else "A"
+            res_num = atom.GetPDBResidueInfo().GetResidueNumber() if atom.GetPDBResidueInfo() else 1
+            # Get Gasteiger charge
+            try:
+                charge = float(atom.GetProp('_GasteigerCharge'))
+                if np.isnan(charge) or np.isinf(charge):
+                    charge = 0.0
+            except Exception:
+                charge = 0.0
+            # Map to AutoDock type
+            autodock_type = autodock_type_map.get(atom.GetAtomicNum(), "C")
+            # Compose PDBQT line (ATOM/HETATM format)
+            pdbqt_line = (
+                f"ATOM  {atom_idx:5d} {atom_name:<4} {res_name:>3} {chain_id:1}{res_num:4d}    "
+                f"{pos.x:8.3f}{pos.y:8.3f}{pos.z:8.3f}  1.00  0.00    "
+                f"{charge:>6.3f} {autodock_type}\n"
+            )
+            pdbqt_lines.append(pdbqt_line)
+            atom_idx += 1
+        # Write out the PDBQT file
         with open(pdbqt_file, 'w') as f:
             f.writelines(pdbqt_lines)
-        
-        logging.info(f"Basic PDB to PDBQT conversion completed: {pdbqt_file}")
-        
+        logging.info(f"Improved PDB to PDBQT conversion completed: {pdbqt_file}")
     except Exception as e:
-        logging.error(f"Simple PDB to PDBQT conversion failed: {e}")
+        logging.error(f"Improved PDB to PDBQT conversion failed: {e}")
         raise
 
 
@@ -203,11 +210,11 @@ def prepare_protein(protein_file):
     if ext == '.pdb':
         try:
             logging.info(f"Preparing protein: cleaning, adding hydrogens, assigning Gasteiger charges, converting to PDBQT...")
-            mgltools_pythonsh = os.path.expanduser('~/mgltools_1.5.7_MacOS-X/bin/pythonsh')
-            prepare_script = os.path.expanduser('~/mgltools_1.5.7_MacOS-X/MGLToolsPckgs/AutoDockTools/Utilities24/prepare_receptor4.py')
+            mgltools_pythonsh = config.get_mgltools_pythonsh()
+            prepare_script = config.get_mgltools_prepare_script()
             
-            # Check if MGLTools is available (for macOS/local development)
-            if os.path.exists(mgltools_pythonsh) and os.path.exists(prepare_script):
+            # Check if MGLTools is available
+            if mgltools_pythonsh and prepare_script and os.path.exists(mgltools_pythonsh) and os.path.exists(prepare_script):
                 cmd = [
                     mgltools_pythonsh, prepare_script,
                     '-r', protein_file,
@@ -417,22 +424,23 @@ def convert_ligand_to_pdbqt(mol, pdbqt_file):
         logging.error("Meeko is not installed. Cannot convert ligand to PDBQT format.")
         sys.exit(1)
     try:
+        # Updated Meeko API - use the new interface only
         prep = MoleculePreparation()
-        prep.prepare(mol)
-        pdbqt_str = prep.write_pdbqt_string()
+        pdbqt_str = prep.write_string(mol)
         with open(pdbqt_file, 'w') as f:
             f.write(pdbqt_str)
         logging.info(f"Ligand converted and saved as: {pdbqt_file}")
     except Exception as e:
-        logging.error(f"Failed to convert ligand to PDBQT: {e}")
+        logging.error(f"Failed to convert ligand to PDBQT using Meeko's new API: {e}")
         sys.exit(1)
 
 
 def main():
     # Check for MGLTools (optional, but warn if missing)
-    mgltools_path = os.path.expanduser('~/mgltools_1.5.7_MacOS-X/bin/pythonsh')
-    if not os.path.exists(mgltools_path):
-        print("Warning: MGLTools not found at ~/mgltools_1.5.7_MacOS-X/bin/pythonsh. Protein preparation may be limited.")
+    if not config.validate_mgltools():
+        print("Warning: MGLTools not found. Protein preparation may be limited.")
+        print("To install MGLTools, visit: http://mgltools.scripps.edu/downloads/downloads/tools/downloads")
+        print("Or set MGLTOOLS_PATH environment variable to point to your installation.")
 
     parser = argparse.ArgumentParser(
         description="Preprocess protein and ligand files for docking."

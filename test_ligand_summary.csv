@@ -1,0 +1,8 @@
+ligand_name,engine,pose_id,affinity_kcal_per_mol,confidence_score,pose_file,status
+test_ligand,vina,1,-8.1,,vina_output\vina_out.pdbqt,success
+test_ligand,vina,2,-7.8,,vina_output\vina_out.pdbqt,success
+test_ligand,gnina,1,,,gnina_output\test_ligand.sdf,success
+test_ligand,diffdock,1,,0.72,diffdock_output\diffdock_out.sdf,success
+test_ligand,diffdock,2,,0.68,diffdock_output\pose_1.sdf,success
+test_ligand,diffdock,3,,,diffdock_output\pose_2.sdf,success
+test_ligand,diffdock,4,,,diffdock_output\pose_3.sdf,success

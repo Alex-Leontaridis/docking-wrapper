@@ -8,6 +8,10 @@ import json
 import shutil
 import tempfile
 from pathlib import Path
+import logging
+
+# Setup logging if not already present
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
 # Load configuration
 def load_config():
@@ -79,7 +83,7 @@ def run_colabfold(fasta, out_pdb):
             tmp_outdir
         ]
         
-        print(f"[ColabFold] Running: {' '.join(cmd)}")
+        logging.info(f"[ColabFold] Running: {' '.join(cmd)}")
         proc = subprocess.run(cmd, check=True, capture_output=True, text=True)
         
         # Find the generated PDB file
@@ -122,7 +126,7 @@ def run_openfold(fasta, out_pdb):
             "--openfold_checkpoint_path", os.path.join(repo_path, "openfold/resources/openfold_params/finetuning_ptm_1.pt")
         ]
         
-        print(f"[OpenFold] Running: {' '.join(cmd)}")
+        logging.info(f"[OpenFold] Running: {' '.join(cmd)}")
         proc = subprocess.run(cmd, check=True, capture_output=True, text=True)
         
         # Find the generated PDB file
@@ -168,7 +172,7 @@ def run_esmfold(fasta, out_pdb):
             "--num-recycles", "1"  # Reduce for speed
         ]
         
-        print(f"[ESMFold] Running: {' '.join(cmd)}")
+        logging.info(f"[ESMFold] Running: {' '.join(cmd)}")
         proc = subprocess.run(cmd, check=True, capture_output=True, text=True)
         
         # Find the generated PDB file
@@ -198,7 +202,7 @@ def main():
 
     fasta = args.protein
     if not os.path.isfile(fasta):
-        print(f"[ERROR] FASTA file not found: {fasta}")
+        logging.error(f"[ERROR] FASTA file not found: {fasta}")
         sys.exit(1)
     ensure_dir(args.output_dir)
     hash_id = fasta_hash(fasta)
@@ -208,8 +212,8 @@ def main():
 
     # Caching
     if os.path.isfile(pdb_path):
-        print(f"[CACHE] Structure already exists: {pdb_path}")
-        print(f"[CACHE] Log: {log_path}")
+        logging.info(f"[CACHE] Structure already exists: {pdb_path}")
+        logging.info(f"[CACHE] Log: {log_path}")
         sys.exit(0)
 
     # Define tool order based on preference
@@ -230,21 +234,21 @@ def main():
     # Try models in order
     start = time.time()
     for model, runner in tools:
-        print(f"[INFO] Trying {model}...")
+        logging.info(f"[INFO] Trying {model}...")
         ok, err = runner(fasta, pdb_path)
         if ok:
             elapsed = time.time() - start
-            print(f"[SUCCESS] {model} prediction complete. Output: {pdb_path}")
+            logging.info(f"[SUCCESS] {model} prediction complete. Output: {pdb_path}")
             log_result(log_path, model, elapsed)
             sys.exit(0)
         else:
-            print(f"[WARNING] {model} failed: {err}")
+            logging.warning(f"[WARNING] {model} failed: {err}")
     
     # All failed
     elapsed = time.time() - start
     log_result(log_path, None, elapsed, error="All models failed.")
-    print(f"[ERROR] All structure predictors failed. See log: {log_path}")
-    print("[INFO] Try installing tools with: python install_real_tools.py")
+    logging.error(f"[ERROR] All structure predictors failed. See log: {log_path}")
+    logging.info("[INFO] Try installing tools with: python install_real_tools.py")
     sys.exit(2)
 
 if __name__ == "__main__":

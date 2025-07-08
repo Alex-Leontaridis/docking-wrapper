@@ -7,6 +7,10 @@ import shutil
 import json
 import tempfile
 from pathlib import Path
+import logging
+
+# Setup logging if not already present
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
 # Load configuration
 def load_config():
@@ -89,7 +93,7 @@ def run_umol_inference(protein_path, ligand_path, output_path):
         else:
             return False, f"Unknown UMol script type: {result}"
         
-        print(f"[UMol] Running: {' '.join(cmd)}")
+        logging.info(f"[UMol] Running: {' '.join(cmd)}")
         
         try:
             proc = subprocess.run(cmd, check=True, capture_output=True, text=True)
@@ -130,17 +134,17 @@ def main():
     
     # Check inputs
     if not os.path.isfile(args.protein):
-        print(f"[ERROR] Protein file not found: {args.protein}")
+        logging.error(f"[ERROR] Protein file not found: {args.protein}")
         sys.exit(1)
     if not os.path.isfile(args.ligand):
-        print(f"[ERROR] Ligand file not found: {args.ligand}")
+        logging.error(f"[ERROR] Ligand file not found: {args.ligand}")
         sys.exit(1)
     
     # Check UMol installation
     ok, result = check_umol_installed()
     if not ok:
-        print(f"[ERROR] {result}")
-        print("[INFO] Install UMol with: python install_real_tools.py")
+        logging.error(f"[ERROR] {result}")
+        logging.info("[INFO] Install UMol with: python install_real_tools.py")
         sys.exit(1)
     
     # Create output directory
@@ -152,10 +156,10 @@ def main():
     
     if success:
         elapsed = time.time() - start_time
-        print(f"[SUCCESS] UMol completed in {elapsed:.2f}s")
-        print(f"[SUCCESS] Output written to {args.output}")
+        logging.info(f"[SUCCESS] UMol completed in {elapsed:.2f}s")
+        logging.info(f"[SUCCESS] Output written to {args.output}")
     else:
-        print(f"[ERROR] UMol failed: {error}")
+        logging.error(f"[ERROR] UMol failed: {error}")
         sys.exit(1)
 
 if __name__ == "__main__":

@@ -1,0 +1,22 @@
+Docking Wrapper: Issues I Found While Testing
+
+Critical Bugs
+    1    Protein PDBQT Conversion is Broken
+Fallback PDB-to-PDBQT prep creates invalid atom types like +0.000 N which crashes Vina. Needs to use proper AutoDock formatting or fix the MGLTools setup.
+    2    Results Parsing Crashes
+parser is referenced but never defined. So even when docking works (like with GNINA), results can’t be parsed. Either implement the parser or remove the broken reference.
+
+Major Issues
+3.⁠ ⁠MGLTools Path is Hardcoded
+It expects MGLTools at a fixed Mac path and fails silently when it’s not there. Needs to be configurable or replaced with something that works across systems.
+ 4 No Error Handling in Docking Steps
+If anything breaks (e.g., bad inputs to Vina), the pipeline just keeps going and then fails later. Needs early exits when prep or docking fails.
+
+Minor/Polish
+5.⁠ ⁠Deprecation Warnings from Meeko — still using old .setup() and .write_pdbqt_string().
+6.⁠ ⁠Missing Dependencies Not Caught Early — sklearn wasn't installed and the error wasn’t clear.
+7.⁠ ⁠DiffDock Dummy Detection is Weak — dummy mode throws misleading errors.
+
+Structural Problems
+8.⁠ ⁠Hardcoded Paths Everywhere — MGLTools, binaries, outputs, etc. Not portable.
+9.⁠ ⁠Inconsistent Logging — errors look totally different across modules.

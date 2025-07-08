@@ -9,6 +9,7 @@ import json
 import time
 import numpy as np
 import shutil
+from config import config
 
 # --- Constants for output directories ---
 VINA_OUT = 'vina_output'
@@ -142,6 +143,14 @@ def extract_box_from_protein(protein_path):
     logging.warning('Strategy 4: No protein atoms found, using default center and box size')
     return (0.0, 0.0, 0.0, 25.0, 25.0, 25.0)
 
+# Cluster cavity points to find distinct cavities
+try:
+    from sklearn.cluster import DBSCAN
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    logging.error("scikit-learn is required for cavity clustering but is not installed. Install it with: pip install scikit-learn")
+    SKLEARN_AVAILABLE = False
+
 def find_protein_cavities(protein_coords, grid_spacing=2.0, probe_radius=1.4):
     """
     Find potential binding cavities in protein using a grid-based approach.
@@ -180,44 +189,45 @@ def find_protein_cavities(protein_coords, grid_spacing=2.0, probe_radius=1.4):
     
     cavity_coords = np.array(cavity_points)
     
-    # Cluster cavity points to find distinct cavities
-    from sklearn.cluster import DBSCAN
-    
-    try:
-        clustering = DBSCAN(eps=grid_spacing * 2, min_samples=3).fit(cavity_coords)
-        labels = clustering.labels_
-        
-        # Process each cluster (cavity)
-        for cluster_id in set(labels):
-            if cluster_id == -1:  # Skip noise points
-                continue
+    # Replace the direct use of DBSCAN with a check for SKLEARN_AVAILABLE
+    if SKLEARN_AVAILABLE:
+        try:
+            clustering = DBSCAN(eps=grid_spacing * 2, min_samples=3).fit(cavity_coords)
+            labels = clustering.labels_
+            
+            # Process each cluster (cavity)
+            for cluster_id in set(labels):
+                if cluster_id == -1:  # Skip noise points
+                    continue
+                    
+                cluster_points = cavity_coords[labels == cluster_id]
+                if len(cluster_points) < 5:  # Skip very small cavities
+                    continue
                 
-            cluster_points = cavity_coords[labels == cluster_id]
-            if len(cluster_points) < 5:  # Skip very small cavities
-                continue
-            
-            # Calculate cavity properties
-            center = cluster_points.mean(axis=0)
-            min_xyz = cluster_points.min(axis=0)
-            max_xyz = cluster_points.max(axis=0)
-            
-            # Box size with padding
-            size = (max_xyz - min_xyz) + 10.0  # 10Å padding for cavities
-            
-            # Ensure minimum box size
-            size = np.maximum(size, 15.0)
-            
-            # Cavity volume estimation
-            volume = np.prod(size)
-            
-            cavities.append({
-                'center': center,
-                'size': size,
-                'volume': volume,
-                'points': len(cluster_points)
-            })
-    
-    except ImportError:
+                # Calculate cavity properties
+                center = cluster_points.mean(axis=0)
+                min_xyz = cluster_points.min(axis=0)
+                max_xyz = cluster_points.max(axis=0)
+                
+                # Box size with padding
+                size = (max_xyz - min_xyz) + 10.0  # 10Å padding for cavities
+                
+                # Ensure minimum box size
+                size = np.maximum(size, 15.0)
+                
+                # Cavity volume estimation
+                volume = np.prod(size)
+                
+                cavities.append({
+                    'center': center,
+                    'size': size,
+                    'volume': volume,
+                    'points': len(cluster_points)
+                })
+        except Exception as e:
+            logging.warning(f'sklearn DBSCAN failed, using simplified cavity detection: {e}')
+            # fallback below
+    else:
         # Fallback if sklearn not available: use simple geometric clustering
         logging.warning('sklearn not available, using simplified cavity detection')
         
@@ -248,11 +258,7 @@ def find_protein_cavities(protein_coords, grid_spacing=2.0, probe_radius=1.4):
 
 def run_vina(protein, ligand, output_dir, box_params):
     """Run AutoDock Vina CLI."""
-    # Use Windows batch file if on Windows
-    if os.name == 'nt':  # Windows
-        vina_bin = 'vina.bat'  # Use Windows batch file
-    else:
-        vina_bin = 'vina'  # Assumes vina is in PATH
+    vina_bin = config.vina_path
     vina_out = os.path.join(output_dir, VINA_OUT, 'vina_out.pdbqt')
     status = {'success': False, 'error': None, 'time': None}
     start = time.time()
@@ -340,98 +346,101 @@ def find_diffdock_script():
     
     for path in possible_paths:
         if os.path.isfile(path):
-            logging.info(f"Found DiffDock script at: {path}")
-            return path
+            # Check if this is the dummy script
+            if _is_dummy_diffdock_script(path):
+                logging.warning(f"Found DiffDock dummy script at: {path}")
+                logging.warning("This is a placeholder script. Please install the real DiffDock.")
+                return None
+            else:
+                logging.info(f"Found DiffDock script at: {path}")
+                return path
     
     # Check environment variable
     diffdock_path = os.environ.get('DIFFDOCK_PATH')
     if diffdock_path:
         script_path = os.path.join(diffdock_path, 'inference.py')
         if os.path.isfile(script_path):
-            logging.info(f"Found DiffDock script from environment: {script_path}")
-            return script_path
+            if _is_dummy_diffdock_script(script_path):
+                logging.warning(f"Found DiffDock dummy script from environment: {script_path}")
+                logging.warning("This is a placeholder script. Please install the real DiffDock.")
+                return None
+            else:
+                logging.info(f"Found DiffDock script from environment: {script_path}")
+                return script_path
     
     logging.warning("DiffDock inference script not found in any standard location")
     return None
 
+def _is_dummy_diffdock_script(script_path):
+    """Check if a DiffDock script is the dummy placeholder."""
+    try:
+        with open(script_path, 'r') as f:
+            content = f.read()
+            # Check for dummy script indicators
+            dummy_indicators = [
+                'DIFFDOCK NOT INSTALLED',
+                'This is a dummy script',
+                'DiffDock not installed',
+                'placeholder script'
+            ]
+            return any(indicator in content for indicator in dummy_indicators)
+    except Exception:
+        # If we can't read the file, assume it's not a dummy
+        return False
+
 def run_gnina(protein, ligand, output_dir, use_gpu=False):
     """Run GNINA CLI for docking and scoring."""
-    gnina_bin = find_gnina_binary()
-    
-    if not gnina_bin:
+    gnina_bin = config.gnina_path
+    if not gnina_bin or not shutil.which(gnina_bin):
         return {
-            'success': False, 
-            'error': 'GNINA binary not found. Please install GNINA or build it from source. Run: python3 scripts/install_backends.py',
+            'success': False,
+            'error': 'GNINA binary not found. Please set GNINA_PATH or install GNINA.',
             'time': 0.0
         }
-    
     gnina_out = os.path.join(output_dir, GNINA_OUT, 'gnina_out.pdbqt')
     gnina_log = os.path.join(output_dir, GNINA_OUT, 'gnina.log')
     gnina_score = os.path.join(output_dir, GNINA_OUT, 'gnina_scores.txt')
+    os.makedirs(os.path.dirname(gnina_out), exist_ok=True)
+    cmd = [
+        gnina_bin,
+        '--receptor', protein,
+        '--ligand', ligand,
+        '--out', gnina_out,
+        '--log', gnina_log
+    ]
+    if use_gpu:
+        cmd.append('--gpu')
+    cmd.extend(['--score_only', '--scorefile', gnina_score])
     status = {'success': False, 'error': None, 'time': None}
     start = time.time()
-    
     try:
-        # Ensure output directory exists
-        os.makedirs(os.path.dirname(gnina_out), exist_ok=True)
-        
-        cmd = [
-            gnina_bin,
-            '--receptor', protein,
-            '--ligand', ligand,
-            '--out', gnina_out,
-            '--log', gnina_log,
-            '--autobox_ligand', ligand,  # Use ligand for autoboxing
-            '--autobox_add', '8'  # Add padding
-        ]
-        
-        # Add GPU support if requested and available
-        if use_gpu:
-            cmd.extend(['--gpu', '--cnn_scoring'])
-        else:
-            cmd.append('--cpu')
-            
-        # Add scoring file
-        cmd.extend(['--score_only', '--scorefile', gnina_score])
-        
         logging.info(f'Running GNINA: {" ".join(cmd)}')
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        
+        subprocess.run(cmd, check=True)
         if not os.path.isfile(gnina_out):
             raise RuntimeError('GNINA did not produce output file.')
-            
         status['success'] = True
         logging.info('GNINA docking completed successfully.')
-        
-    except subprocess.CalledProcessError as e:
-        status['error'] = f"GNINA failed with exit code {e.returncode}: {e.stderr}"
-        logging.error(f'[GNINA] Docking failed: {status["error"]}')
     except Exception as e:
         status['error'] = str(e)
         logging.error(f'[GNINA] Docking failed: {e}', exc_info=True)
-        
     status['time'] = round(time.time() - start, 2)
     return status
 
 def run_diffdock(protein, ligand, output_dir):
     """Run DiffDock for pose prediction."""
-    diffdock_script = find_diffdock_script()
-    
-    if not diffdock_script:
+    diffdock_script = os.path.join(config.diffdock_path, 'inference.py')
+    if not os.path.isfile(diffdock_script):
         return {
             'success': False,
-            'error': 'DiffDock script not found at expected locations. Please install DiffDock.',
+            'error': 'DiffDock script not found at expected location. Please set DIFFDOCK_PATH or install DiffDock.',
             'time': 0.0
         }
-    
+    diffdock_out_dir = os.path.join(output_dir, DIFFDOCK_OUT)
+    os.makedirs(diffdock_out_dir, exist_ok=True)
     status = {'success': False, 'error': None, 'time': None}
     start = time.time()
     
     try:
-        # Ensure output directory exists
-        diffdock_out_dir = os.path.join(output_dir, DIFFDOCK_OUT)
-        os.makedirs(diffdock_out_dir, exist_ok=True)
-        
         # Create temporary CSV file for DiffDock input
         import tempfile
         with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
@@ -551,6 +560,14 @@ def run_batch_docking(protein_files, ligand_files, output_base_dir, use_gnina=Fa
             backend_status['vina'] = vina_status
             if not vina_status['success']:
                 failed_runs['vina'] = vina_status['error']
+                batch_results[combo_name] = {
+                    'protein': protein_file,
+                    'ligand': ligand_file,
+                    'output_dir': combo_output_dir,
+                    'backend_status': backend_status,
+                    'failed_runs': failed_runs
+                }
+                continue
             
             # Optionally run GNINA
             if use_gnina:
@@ -692,6 +709,9 @@ def main():
             backend_status['vina'] = vina_status
             if not vina_status['success']:
                 failed_runs['vina'] = vina_status['error']
+                batch_results = {args.protein: {'error': vina_status['error']}}
+                print(f"Vina failed: {vina_status['error']}")
+                sys.exit(1)
         else:
             msg = 'Vina skipped: All box parameters (--center_x, --center_y, --center_z, --size_x, --size_y, --size_z) must be provided.'
             logging.warning(msg)

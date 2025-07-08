@@ -20,7 +20,11 @@ import sys
 import json
 import numpy as np
 from Bio.PDB import PDBParser, Superimposer
-from sklearn.cluster import DBSCAN
+try:
+    from sklearn.cluster import DBSCAN
+except ImportError:
+    print("[ERROR] The 'scikit-learn' package is required for clustering but is not installed.\nInstall it with: pip install scikit-learn")
+    sys.exit(1)
 from collections import defaultdict
 
 def parse_args():

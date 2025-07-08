@@ -44,8 +44,8 @@ try:
 except ImportError:
     HAVE_TABULATE = False
 
-# Add scripts directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import existing modules
 from prep_structures import (
@@ -56,7 +56,9 @@ from run_docking_multi import (
     run_vina, run_gnina, run_diffdock, extract_box_from_protein,
     ensure_output_dirs as ensure_single_output_dirs
 )
-from parse_and_score_results import DockingResultsParser
+from docking_results_parser import DockingResultsParser
+from config import Config
+from utils.logging import setup_logging, get_global_logger
 
 # --- Constants ---
 DEFAULT_CONFIG = {
@@ -121,9 +123,11 @@ class BatchDockingPipeline:
             if shutil.which(binary) is None:
                 missing.append(binary)
         # Check for MGLTools (optional, but warn if missing)
-        mgltools_path = os.path.expanduser('~/mgltools_1.5.7_MacOS-X/bin/pythonsh')
-        if not os.path.exists(mgltools_path):
-            print(f"{COLOR_WARN}Warning: MGLTools not found at {mgltools_path}. Protein preparation may be limited.{COLOR_RESET}")
+        self.config_obj = Config()
+        if not self.config_obj.validate_mgltools():
+            print(f"{COLOR_WARN}Warning: MGLTools not found. Protein preparation may be limited.{COLOR_RESET}")
+            print(f"To install MGLTools, visit: http://mgltools.scripps.edu/downloads/downloads/tools/downloads")
+            print(f"Or set MGLTOOLS_PATH environment variable to point to your installation.")
         if missing:
             print(f"{COLOR_FAIL}Missing required external binaries: {', '.join(missing)}{COLOR_RESET}")
             print(f"Please install them and ensure they are in your PATH.")
@@ -273,11 +277,11 @@ class BatchDockingPipeline:
                 # Ensure output directory exists
                 os.makedirs(os.path.dirname(output_file), exist_ok=True)
                 
-                mgltools_pythonsh = os.path.expanduser('~/mgltools_1.5.7_MacOS-X/bin/pythonsh')
-                prepare_script = os.path.expanduser('~/mgltools_1.5.7_MacOS-X/MGLToolsPckgs/AutoDockTools/Utilities24/prepare_receptor4.py')
+                mgltools_pythonsh = self.config_obj.get_mgltools_pythonsh()
+                prepare_script = self.config_obj.get_mgltools_prepare_script()
                 
-                # Check if MGLTools is available (for macOS/local development)
-                if os.path.exists(mgltools_pythonsh) and os.path.exists(prepare_script):
+                # Check if MGLTools is available
+                if mgltools_pythonsh and prepare_script and os.path.exists(mgltools_pythonsh) and os.path.exists(prepare_script):
                     cmd = [
                         mgltools_pythonsh, prepare_script,
                         '-r', protein_file,
@@ -389,7 +393,9 @@ class BatchDockingPipeline:
                         if padding_needed > 0:
                             pdb_part += ' ' * padding_needed
                         
-                        pdbqt_line = f"{pdb_part}  +0.000 {autodock_type}"
+                        # Use proper AutoDock charge format (6.3f) instead of hardcoded +0.000
+                        charge = 0.000  # Default charge, could be calculated from atom type
+                        pdbqt_line = f"{pdb_part}  {charge:>6.3f} {autodock_type}"
                         pdbqt_lines.append(pdbqt_line + '\n')
                 else:
                     # Skip header and other PDB-specific lines that Vina doesn't need
@@ -433,11 +439,24 @@ class BatchDockingPipeline:
             self.logger.info(f"[{ligand_name}] Stage 1: Preparing ligand structure")
             stage_start = time.time()
             
+            # Validate input ligand file
+            if not os.path.exists(ligand_path):
+                result['stages']['preparation'] = False
+                result['errors']['preparation'] = f"Ligand file not found: {ligand_path}"
+                result['timings']['preparation'] = time.time() - stage_start
+                self.logger.error(f"[{ligand_name}] Ligand file not found: {ligand_path}")
+                return result
+            
             prepared_ligand_dir = self.output_dir / "prepared_structures"
             prepared_ligand = prepared_ligand_dir / f"{ligand_name}_prepared.pdbqt"
             
             try:
                 prepare_ligand_single(str(ligand_path), str(prepared_ligand))
+                
+                # Validate that preparation actually created the file
+                if not os.path.exists(prepared_ligand):
+                    raise Exception("Ligand preparation did not create output file")
+                
                 result['stages']['preparation'] = True
                 result['timings']['preparation'] = time.time() - stage_start
                 self.logger.info(f"[{ligand_name}] Ligand prepared successfully")
@@ -459,6 +478,22 @@ class BatchDockingPipeline:
                 enabled_engines.append("gnina")
             if self.config["engines"]["diffdock"]["enabled"]:
                 enabled_engines.append("diffdock")
+            
+            # Validate that we have at least one engine enabled
+            if not enabled_engines:
+                result['stages']['docking'] = False
+                result['errors']['docking'] = "No docking engines enabled in configuration"
+                result['timings']['docking'] = time.time() - stage_start
+                self.logger.error(f"[{ligand_name}] No docking engines enabled")
+                return result
+            
+            # Validate that prepared protein exists
+            if not os.path.exists(prepared_protein):
+                result['stages']['docking'] = False
+                result['errors']['docking'] = f"Prepared protein file not found: {prepared_protein}"
+                result['timings']['docking'] = time.time() - stage_start
+                self.logger.error(f"[{ligand_name}] Prepared protein file not found: {prepared_protein}")
+                return result
             
             self.logger.info(f"[{ligand_name}] Stage 2: Running docking with engines: {enabled_engines}")
             
@@ -506,7 +541,14 @@ class BatchDockingPipeline:
                     result['timings'][engine] = time.time() - engine_start
                     
                     if status['success']:
-                        self.logger.info(f"[{ligand_name}] {engine.upper()} completed successfully")
+                        # Validate that the engine actually produced output files
+                        output_files_exist = self._validate_engine_output(engine, str(ligand_output_dir))
+                        if not output_files_exist:
+                            result['stages'][engine] = False
+                            result['errors'][engine] = f"{engine.upper()} reported success but no output files found"
+                            self.logger.error(f"[{ligand_name}] {engine.upper()} reported success but no output files found")
+                        else:
+                            self.logger.info(f"[{ligand_name}] {engine.upper()} completed successfully")
                     else:
                         result['errors'][engine] = status.get('error', 'Unknown error')
                         self.logger.error(f"[{ligand_name}] {engine.upper()} failed: {status.get('error')}")
@@ -584,6 +626,30 @@ class BatchDockingPipeline:
             self.logger.debug(f"[{ligand_name}] Traceback: {traceback.format_exc()}")
         
         return result
+    
+    def _validate_engine_output(self, engine: str, output_dir: str) -> bool:
+        """Validate that a docking engine produced expected output files."""
+        output_path = Path(output_dir) / f"{engine}_output"
+        
+        if not output_path.exists():
+            return False
+        
+        # Check for expected output files based on engine
+        if engine == "vina":
+            vina_out = output_path / "vina_out.pdbqt"
+            return vina_out.exists() and vina_out.stat().st_size > 0
+        elif engine == "gnina":
+            # GNINA typically produces .sdf files
+            sdf_files = list(output_path.glob("*.sdf"))
+            return len(sdf_files) > 0
+        elif engine == "diffdock":
+            # DiffDock produces .sdf files and confidence.txt
+            sdf_files = list(output_path.glob("*.sdf"))
+            confidence_file = output_path / "diffdock_confidence.txt"
+            return len(sdf_files) > 0 and confidence_file.exists()
+        else:
+            # Unknown engine, assume success if directory exists and has files
+            return len(list(output_path.glob("*"))) > 0
     
     def print_final_summary(self, results: List[Dict]):
         print(f"\n{COLOR_INFO}{'='*60}{COLOR_RESET}")
