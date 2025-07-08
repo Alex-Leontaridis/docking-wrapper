@@ -10,6 +10,8 @@ import sys
 import os
 import subprocess
 import importlib
+import platform
+import shutil
 from typing import Dict, List, Tuple
 
 # Required Python packages
@@ -63,21 +65,38 @@ def check_external_tool(tool_name: str, display_name: str) -> Tuple[bool, str]:
         return False, f"✗ {display_name} (not found in PATH)"
 
 def check_mgltools() -> Tuple[bool, str]:
-    """Check if MGLTools is available."""
-    # Check environment variable
+    """Check if MGLTools is available using environment variables and platform detection."""
+    # Check environment variable first
     mgltools_path = os.environ.get('MGLTOOLS_PATH')
     if mgltools_path and os.path.exists(mgltools_path):
         pythonsh_path = os.path.join(mgltools_path, 'bin', 'pythonsh')
         if os.path.exists(pythonsh_path):
             return True, f"✓ MGLTools (found at {mgltools_path})"
     
-    # Check common locations
-    common_paths = [
-        os.path.expanduser('~/mgltools_1.5.7_MacOS-X'),
-        '/opt/mgltools',
-        '/usr/local/mgltools',
-        'C:\\Program Files\\MGLTools',
-    ]
+    # Platform-specific common locations
+    system = platform.system().lower()
+    home = os.path.expanduser("~")
+    
+    if system == 'windows':
+        common_paths = [
+            'C:\\Program Files\\MGLTools',
+            'C:\\mgltools',
+            os.path.join(home, 'mgltools'),
+        ]
+    elif system == 'darwin':  # macOS
+        common_paths = [
+            os.path.join(home, 'mgltools_1.5.7_MacOS-X'),
+            '/opt/mgltools',
+            '/usr/local/mgltools',
+            '/Applications/mgltools',
+        ]
+    else:  # Linux
+        common_paths = [
+            '/opt/mgltools',
+            '/usr/local/mgltools',
+            os.path.join(home, 'mgltools'),
+            '/usr/share/mgltools',
+        ]
     
     for path in common_paths:
         pythonsh_path = os.path.join(path, 'bin', 'pythonsh')

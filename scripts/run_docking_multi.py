@@ -10,6 +10,7 @@ import time
 import numpy as np
 import shutil
 from config import config
+import platform
 
 # --- Constants for output directories ---
 VINA_OUT = 'vina_output'
@@ -301,23 +302,41 @@ def load_backend_config():
     return None
 
 def find_gnina_binary():
-    """Find GNINA binary in various possible locations."""
-    # Use Windows batch file if on Windows
-    if os.name == 'nt':  # Windows
+    """Find GNINA binary using environment variables and platform detection."""
+    # Check environment variable first
+    gnina_path = os.environ.get('GNINA_PATH')
+    if gnina_path and os.path.isfile(gnina_path):
+        logging.info(f"Found GNINA binary from environment: {gnina_path}")
+        return gnina_path
+    
+    # Check if gnina is in PATH
+    if shutil.which('gnina'):
+        logging.info("Found GNINA binary in PATH")
+        return 'gnina'
+    
+    # Platform-specific common locations
+    system = platform.system().lower()
+    if system == 'windows':
         possible_paths = [
-            'gnina.bat',  # Windows batch file
-            'gnina',  # In PATH
+            'gnina.exe',  # In PATH
+            './gnina.exe',  # Current directory
             './gnina.bat',  # Current directory
             './gnina',  # Current directory
         ]
-    else:
+    elif system == 'darwin':  # macOS
         possible_paths = [
-            'gnina',  # In PATH
-            '/usr/local/bin/gnina',  # Standard installation
-            '/opt/conda/envs/docking/bin/gnina',  # Conda environment
-            './gnina',  # Current directory
-            os.path.expanduser('~/gnina'),  # User home
-            '/usr/bin/gnina',  # System binary
+            '/usr/local/bin/gnina',
+            '/opt/homebrew/bin/gnina',
+            os.path.expanduser('~/gnina'),
+            './gnina',
+        ]
+    else:  # Linux
+        possible_paths = [
+            '/usr/local/bin/gnina',
+            '/usr/bin/gnina',
+            '/opt/conda/envs/docking/bin/gnina',
+            os.path.expanduser('~/gnina'),
+            './gnina',
         ]
     
     for path in possible_paths:
@@ -325,68 +344,141 @@ def find_gnina_binary():
             logging.info(f"Found GNINA binary at: {path}")
             return path
     
-    # Check environment variable
-    gnina_path = os.environ.get('GNINA_PATH')
-    if gnina_path and os.path.isfile(gnina_path):
-        logging.info(f"Found GNINA binary from environment: {gnina_path}")
-        return gnina_path
-    
-    logging.warning("GNINA binary not found in any standard location")
+    logging.warning("GNINA binary not found. Please set GNINA_PATH environment variable or install GNINA.")
     return None
 
+def _is_dummy_diffdock_script(script_path):
+    """
+    Check if a DiffDock script is the dummy placeholder with comprehensive detection.
+    
+    Args:
+        script_path: Path to the DiffDock script
+        
+    Returns:
+        bool: True if it's a dummy script, False if it's a real script
+    """
+    try:
+        # Check file size first (dummy scripts are usually small)
+        file_size = os.path.getsize(script_path)
+        if file_size < 1000:  # Less than 1KB is suspicious
+            logging.warning(f"DiffDock script is very small ({file_size} bytes), likely a dummy")
+            return True
+        
+        with open(script_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
+        # Check for dummy script indicators
+        dummy_indicators = [
+            'DIFFDOCK NOT INSTALLED',
+            'This is a dummy script',
+            'DiffDock not installed',
+            'placeholder script',
+            'DUMMY_SCRIPT',
+            'raise NotImplementedError',
+            'print("DiffDock not available")',
+            'sys.exit(1)  # DiffDock not installed',
+            'return False  # DiffDock not available'
+        ]
+        
+        # Check if any dummy indicators are present
+        for indicator in dummy_indicators:
+            if indicator.lower() in content.lower():
+                logging.warning(f"Found dummy script indicator: '{indicator}' in {script_path}")
+                return True
+        
+        # Check for real DiffDock indicators
+        real_indicators = [
+            'import torch',
+            'import torch_geometric',
+            'from diffdock',
+            'class DiffDock',
+            'def inference',
+            'def predict',
+            'torch.load',
+            'model.eval()',
+            'protein_ligand_csv',
+            'out_dir'
+        ]
+        
+        # Count real indicators
+        real_count = sum(1 for indicator in real_indicators if indicator.lower() in content.lower())
+        
+        # If we have very few real indicators, it's likely a dummy
+        if real_count < 3:
+            logging.warning(f"DiffDock script has only {real_count} real indicators, likely a dummy")
+            return True
+        
+        # Check for proper imports and structure
+        if 'import' not in content or 'def ' not in content:
+            logging.warning("DiffDock script lacks proper Python structure")
+            return True
+        
+        # If we get here, it looks like a real script
+        return False
+        
+    except Exception as e:
+        logging.warning(f"Could not analyze DiffDock script {script_path}: {e}")
+        # If we can't read the file, assume it's not a dummy to be safe
+        return False
+
 def find_diffdock_script():
-    """Find DiffDock inference script in various possible locations."""
-    possible_paths = [
-        'DiffDock/inference.py',  # Current directory
-        './DiffDock/inference.py',  # Relative path
-        '/opt/DiffDock/inference.py',  # Docker installation
-        os.path.expanduser('~/DiffDock/inference.py'),  # User home
-        'inference.py',  # If in PATH somehow
-    ]
+    """
+    Find DiffDock inference script using environment variables and platform detection.
     
-    for path in possible_paths:
-        if os.path.isfile(path):
-            # Check if this is the dummy script
-            if _is_dummy_diffdock_script(path):
-                logging.warning(f"Found DiffDock dummy script at: {path}")
-                logging.warning("This is a placeholder script. Please install the real DiffDock.")
-                return None
-            else:
-                logging.info(f"Found DiffDock script at: {path}")
-                return path
+    Returns:
+        str or None: Path to the DiffDock script, or None if not found or dummy detected
+    """
+    logger = setup_logging('DiffDock')
     
-    # Check environment variable
+    # Check environment variable first
     diffdock_path = os.environ.get('DIFFDOCK_PATH')
     if diffdock_path:
         script_path = os.path.join(diffdock_path, 'inference.py')
         if os.path.isfile(script_path):
             if _is_dummy_diffdock_script(script_path):
-                logging.warning(f"Found DiffDock dummy script from environment: {script_path}")
-                logging.warning("This is a placeholder script. Please install the real DiffDock.")
+                logger.warning(f"Found DiffDock dummy script from environment: {script_path}")
+                logger.warning("This is a placeholder script. Please install the real DiffDock.")
+                logger.info("Install DiffDock with: git clone https://github.com/gcorso/DiffDock.git")
                 return None
             else:
-                logging.info(f"Found DiffDock script from environment: {script_path}")
+                logger.info(f"Found DiffDock script from environment: {script_path}")
                 return script_path
+        else:
+            logger.warning(f"DIFFDOCK_PATH set to {diffdock_path} but inference.py not found")
     
-    logging.warning("DiffDock inference script not found in any standard location")
+    # Platform-specific common locations
+    system = platform.system().lower()
+    if system == 'windows':
+        possible_paths = [
+            'DiffDock\\inference.py',  # Current directory
+            '.\\DiffDock\\inference.py',  # Relative path
+            os.path.expanduser('~\\DiffDock\\inference.py'),  # User home
+            'C:\\DiffDock\\inference.py',  # System installation
+        ]
+    else:  # Linux/macOS
+        possible_paths = [
+            'DiffDock/inference.py',  # Current directory
+            './DiffDock/inference.py',  # Relative path
+            '/opt/DiffDock/inference.py',  # Docker installation
+            os.path.expanduser('~/DiffDock/inference.py'),  # User home
+            '/usr/local/DiffDock/inference.py',  # System installation
+            '/usr/share/DiffDock/inference.py',  # Alternative system location
+        ]
+    
+    for path in possible_paths:
+        if os.path.isfile(path):
+            if _is_dummy_diffdock_script(path):
+                logger.warning(f"Found DiffDock dummy script at: {path}")
+                logger.warning("This is a placeholder script. Please install the real DiffDock.")
+                logger.info("Install DiffDock with: git clone https://github.com/gcorso/DiffDock.git")
+                return None
+            else:
+                logger.info(f"Found DiffDock script at: {path}")
+                return path
+    
+    logger.warning("DiffDock inference script not found. Please set DIFFDOCK_PATH environment variable or install DiffDock.")
+    logger.info("Install DiffDock with: git clone https://github.com/gcorso/DiffDock.git")
     return None
-
-def _is_dummy_diffdock_script(script_path):
-    """Check if a DiffDock script is the dummy placeholder."""
-    try:
-        with open(script_path, 'r') as f:
-            content = f.read()
-            # Check for dummy script indicators
-            dummy_indicators = [
-                'DIFFDOCK NOT INSTALLED',
-                'This is a dummy script',
-                'DiffDock not installed',
-                'placeholder script'
-            ]
-            return any(indicator in content for indicator in dummy_indicators)
-    except Exception:
-        # If we can't read the file, assume it's not a dummy
-        return False
 
 def run_gnina(protein, ligand, output_dir, use_gpu=False):
     """Run GNINA CLI for docking and scoring."""

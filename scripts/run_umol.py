@@ -1,166 +1,144 @@
-import argparse
+#!/usr/bin/env python3
+"""
+UMol Docking Runner
+
+Runs UMol docking for protein-ligand complexes.
+"""
+
 import os
-import subprocess
 import sys
+import subprocess
 import time
-import shutil
-import json
-import tempfile
 from pathlib import Path
-import logging
+from typing import Optional, Dict, Any
 
-# Setup logging if not already present
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+# Add the project root to the path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
-# Load configuration
-def load_config():
-    config_path = "tools_config.json"
-    if os.path.exists(config_path):
-        with open(config_path, 'r') as f:
-            return json.load(f)
-    return {}
+from utils.logging import setup_logging
 
-UMOL_REPO = "Umol"
-PREDICT_SCRIPT = "predict.sh"
-
-def check_umol_installed():
-    """Check if UMol is properly installed"""
-    config = load_config()
-    umol_config = config.get("tools", {}).get("umol", {})
-    repo_path = umol_config.get("repo_path", UMOL_REPO)
+def run_umol(protein: str, ligand: str, output: str, 
+             num_poses: int = 10, exhaustiveness: int = 8,
+             energy_range: int = 3, **kwargs) -> Dict[str, Any]:
+    """
+    Run UMol docking.
     
-    # Check if repository exists
-    if not os.path.exists(repo_path):
-        return False, f"UMol repository not found at {repo_path}"
+    Args:
+        protein: Path to protein PDB file
+        ligand: Path to ligand file (SDF, MOL, etc.)
+        output: Path to output file
+        num_poses: Number of poses to generate
+        exhaustiveness: Exhaustiveness parameter
+        energy_range: Energy range parameter
+        **kwargs: Additional UMol parameters
     
-    # Check for predict script
-    script_path = os.path.join(repo_path, PREDICT_SCRIPT)
-    if os.path.isfile(script_path):
-        return True, script_path
+    Returns:
+        Dictionary with results
+    """
+    # Setup centralized logging
+    logger = setup_logging('UMol')
     
-    # Check for Python inference script
-    inference_script = os.path.join(repo_path, "inference.py")
-    if os.path.isfile(inference_script):
-        return True, inference_script
+    # Validate inputs
+    if not os.path.exists(protein):
+        logger.error(f"Protein file not found: {protein}", error_code='FILE_NOT_FOUND')
+        return {'success': False, 'error': f'Protein file not found: {protein}'}
     
-    # Check for main script
-    main_script = os.path.join(repo_path, "main.py")
-    if os.path.isfile(main_script):
-        return True, main_script
+    if not os.path.exists(ligand):
+        logger.error(f"Ligand file not found: {ligand}", error_code='FILE_NOT_FOUND')
+        return {'success': False, 'error': f'Ligand file not found: {ligand}'}
     
-    return False, "UMol not properly installed"
-
-def prepare_umol_input(protein_path, ligand_path, output_dir):
-    """Prepare input files for UMol"""
-    # UMol expects specific input format
-    # Copy files to output directory with proper names
-    protein_dest = os.path.join(output_dir, "protein.pdb")
-    ligand_dest = os.path.join(output_dir, "ligand.sdf")
+    # Build UMol command
+    cmd = [
+        'umol',
+        '--receptor', protein,
+        '--ligand', ligand,
+        '--out', output,
+        '--num_poses', str(num_poses),
+        '--exhaustiveness', str(exhaustiveness),
+        '--energy_range', str(energy_range)
+    ]
     
-    shutil.copy2(protein_path, protein_dest)
-    shutil.copy2(ligand_path, ligand_dest)
-    
-    return protein_dest, ligand_dest
-
-def run_umol_inference(protein_path, ligand_path, output_path):
-    """Run UMol inference"""
-    config = load_config()
-    umol_config = config.get("tools", {}).get("umol", {})
-    repo_path = umol_config.get("repo_path", UMOL_REPO)
-    
-    # Check installation
-    ok, result = check_umol_installed()
-    if not ok:
-        return False, result
-    
-    # Create temporary directory for UMol input/output
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # Prepare input files
-        protein_dest, ligand_dest = prepare_umol_input(protein_path, ligand_path, tmpdir)
-        
-        # Run UMol inference
-        if result.endswith('.sh'):
-            # Use bash script
-            cmd = ["bash", result, protein_dest, ligand_dest, tmpdir]
-        elif result.endswith('.py'):
-            # Use Python script
-            cmd = [
-                sys.executable, result,
-                "--protein", protein_dest,
-                "--ligand", ligand_dest,
-                "--output", tmpdir
-            ]
-        else:
-            return False, f"Unknown UMol script type: {result}"
-        
-        logging.info(f"[UMol] Running: {' '.join(cmd)}")
-        
-        try:
-            proc = subprocess.run(cmd, check=True, capture_output=True, text=True)
-            
-            # Find output files
-            output_files = []
-            for root, _, files in os.walk(tmpdir):
-                for file in files:
-                    if file.endswith('.pdb') or file.endswith('.sdf'):
-                        output_files.append(os.path.join(root, file))
-            
-            if output_files:
-                # Copy output to destination
-                for output_file in output_files:
-                    dest_file = os.path.join(output_path, os.path.basename(output_file))
-                    shutil.copy2(output_file, dest_file)
-                
-                # Save log
-                log_file = os.path.join(output_path, "umol.log")
-                with open(log_file, 'w') as f:
-                    f.write(proc.stdout + "\n" + proc.stderr)
-                
-                return True, None
-            else:
-                return False, "UMol did not produce output files"
-                
-        except subprocess.CalledProcessError as e:
-            return False, f"UMol failed: {e.stderr}"
-        except Exception as e:
-            return False, f"UMol error: {e}"
-
-def main():
-    parser = argparse.ArgumentParser(description="UMol pose prediction")
-    parser.add_argument("--protein", required=True, help="Protein PDB file")
-    parser.add_argument("--ligand", required=True, help="Ligand SDF file")
-    parser.add_argument("--output", required=True, help="Output directory")
-    args = parser.parse_args()
-    
-    # Check inputs
-    if not os.path.isfile(args.protein):
-        logging.error(f"[ERROR] Protein file not found: {args.protein}")
-        sys.exit(1)
-    if not os.path.isfile(args.ligand):
-        logging.error(f"[ERROR] Ligand file not found: {args.ligand}")
-        sys.exit(1)
-    
-    # Check UMol installation
-    ok, result = check_umol_installed()
-    if not ok:
-        logging.error(f"[ERROR] {result}")
-        logging.info("[INFO] Install UMol with: python install_real_tools.py")
-        sys.exit(1)
-    
-    # Create output directory
-    os.makedirs(args.output, exist_ok=True)
+    # Add additional parameters
+    for key, value in kwargs.items():
+        if value is not None:
+            cmd.extend([f'--{key}', str(value)])
     
     # Run UMol
     start_time = time.time()
-    success, error = run_umol_inference(args.protein, args.ligand, args.output)
+    try:
+        logger.info(f"Running: {' '.join(cmd)}")
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=3600  # 1 hour timeout
+        )
+        
+        if result.returncode == 0:
+            elapsed = time.time() - start_time
+            logger.info(f"UMol completed in {elapsed:.2f}s")
+            logger.info(f"Output written to {output}")
+            return {
+                'success': True,
+                'output_file': output,
+                'elapsed_time': elapsed,
+                'stdout': result.stdout,
+                'stderr': result.stderr
+            }
+        else:
+            logger.error(f"UMol failed: {result.stderr}", error_code='UMOL_FAILED')
+            return {
+                'success': False,
+                'error': result.stderr,
+                'returncode': result.returncode,
+                'stdout': result.stdout,
+                'stderr': result.stderr
+            }
+            
+    except subprocess.TimeoutExpired:
+        logger.error("UMol timed out after 1 hour", error_code='TIMEOUT_ERROR')
+        return {'success': False, 'error': 'UMol timed out after 1 hour'}
+    except FileNotFoundError:
+        logger.error("UMol not found. Install UMol with: python install_real_tools.py", error_code='ENGINE_NOT_FOUND')
+        return {'success': False, 'error': 'UMol not found. Install UMol with: python install_real_tools.py'}
+    except Exception as e:
+        logger.error(f"UMol failed: {e}", error_code='SYSTEM_ERROR')
+        return {'success': False, 'error': str(e)}
+
+def main():
+    """Main function for command line usage."""
+    import argparse
     
-    if success:
-        elapsed = time.time() - start_time
-        logging.info(f"[SUCCESS] UMol completed in {elapsed:.2f}s")
-        logging.info(f"[SUCCESS] Output written to {args.output}")
+    parser = argparse.ArgumentParser(description='Run UMol docking')
+    parser.add_argument('--protein', required=True, help='Protein PDB file')
+    parser.add_argument('--ligand', required=True, help='Ligand file')
+    parser.add_argument('--output', required=True, help='Output file')
+    parser.add_argument('--num_poses', type=int, default=10, help='Number of poses')
+    parser.add_argument('--exhaustiveness', type=int, default=8, help='Exhaustiveness')
+    parser.add_argument('--energy_range', type=int, default=3, help='Energy range')
+    
+    args = parser.parse_args()
+    
+    # Setup logging
+    logger = setup_logging('UMol')
+    
+    # Run UMol
+    result = run_umol(
+        protein=args.protein,
+        ligand=args.ligand,
+        output=args.output,
+        num_poses=args.num_poses,
+        exhaustiveness=args.exhaustiveness,
+        energy_range=args.energy_range
+    )
+    
+    if result['success']:
+        logger.info("UMol completed successfully")
+        sys.exit(0)
     else:
-        logging.error(f"[ERROR] UMol failed: {error}")
+        logger.error(f"UMol failed: {result['error']}")
         sys.exit(1)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main() 

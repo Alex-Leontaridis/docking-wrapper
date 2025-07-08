@@ -227,35 +227,57 @@ def validate_ligand_file(file_path: str) -> Tuple[bool, str]:
         return False, f"Unsupported ligand format: {ext}"
 
 def find_conda() -> Optional[str]:
-    """Find conda executable with comprehensive path checking"""
-    # Try PATH first
-    conda = shutil.which("conda")
-    if conda:
-        return conda
-        
-    # Try common install locations
-    home = os.path.expanduser("~")
-    candidates = [
-        os.path.join(home, "miniconda3", "Scripts", "conda.exe"),
-        os.path.join(home, "miniconda3", "condabin", "conda.bat"),
-        os.path.join(home, "anaconda3", "Scripts", "conda.exe"),
-        os.path.join(home, "anaconda3", "condabin", "conda.bat"),
-        os.path.join(home, "miniconda3", "bin", "conda"),
-        os.path.join(home, "anaconda3", "bin", "conda"),
-    ]
+    """Find conda executable using environment variables and platform detection."""
+    # Check environment variable first
+    conda_path = os.environ.get('CONDA_PATH')
+    if conda_path and os.path.isfile(conda_path):
+        return conda_path
     
-    if platform.system() != "Windows":
-        candidates += [
+    # Check if conda is in PATH
+    if shutil.which('conda'):
+        return 'conda'
+    
+    # Platform-specific common locations
+    system = platform.system().lower()
+    home = os.path.expanduser("~")
+    
+    if system == 'windows':
+        candidates = [
+            os.path.join(home, "miniconda3", "Scripts", "conda.exe"),
+            os.path.join(home, "anaconda3", "Scripts", "conda.exe"),
+            os.path.join(home, "miniconda3", "condabin", "conda.bat"),
+            os.path.join(home, "anaconda3", "condabin", "conda.bat"),
+            "C:\\ProgramData\\Miniconda3\\Scripts\\conda.exe",
+            "C:\\ProgramData\\Anaconda3\\Scripts\\conda.exe",
+            "C:\\Users\\%USERNAME%\\miniconda3\\Scripts\\conda.exe",
+            "C:\\Users\\%USERNAME%\\anaconda3\\Scripts\\conda.exe",
+        ]
+    elif system == 'darwin':  # macOS
+        candidates = [
+            os.path.join(home, "miniconda3", "bin", "conda"),
+            os.path.join(home, "anaconda3", "bin", "conda"),
+            "/opt/miniconda3/bin/conda",
+            "/opt/anaconda3/bin/conda",
+            "/usr/local/miniconda3/bin/conda",
+            "/usr/local/anaconda3/bin/conda",
+            "/opt/homebrew/miniconda3/bin/conda",
+            "/opt/homebrew/anaconda3/bin/conda",
+        ]
+    else:  # Linux
+        candidates = [
+            os.path.join(home, "miniconda3", "bin", "conda"),
+            os.path.join(home, "anaconda3", "bin", "conda"),
             "/opt/conda/bin/conda",
             "/usr/bin/conda",
             "/usr/local/bin/conda",
             "/opt/miniconda3/bin/conda",
-            "/opt/anaconda3/bin/conda"
+            "/opt/anaconda3/bin/conda",
         ]
     
     for path in candidates:
         if os.path.exists(path):
             return path
+    
     return None
 
 def check_system_resources(config: Dict[str, Any]) -> Tuple[bool, str]:

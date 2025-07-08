@@ -189,7 +189,8 @@ test_image() {
         
         # Test 6: DiffDock
         print_status "Test 6: DiffDock..."
-        if docker run --rm "$image_name" test -f /opt/DiffDock/inference.py; then
+        DIFFDOCK_PATH=${DIFFDOCK_PATH:-"/opt/DiffDock"}
+        if docker run --rm "$image_name" test -f "$DIFFDOCK_PATH/inference.py"; then
             print_success "DiffDock test passed"
         else
             print_warning "DiffDock test failed"

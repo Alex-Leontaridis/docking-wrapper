@@ -184,21 +184,24 @@ test_gnina() {
 test_diffdock() {
     print_status "Testing DiffDock..."
     
+    # Use environment variable or default path
+    DIFFDOCK_PATH=${DIFFDOCK_PATH:-"/opt/DiffDock"}
+    
     run_test "DiffDock installation directory" \
-        "docker run --rm $IMAGE_NAME test -d /opt/DiffDock"
+        "docker run --rm $IMAGE_NAME test -d $DIFFDOCK_PATH"
     
     run_test "DiffDock inference script" \
-        "docker run --rm $IMAGE_NAME test -f /opt/DiffDock/inference.py"
+        "docker run --rm $IMAGE_NAME test -f $DIFFDOCK_PATH/inference.py"
     
     run_test "DiffDock Python imports" \
-        "docker run --rm $IMAGE_NAME python3 -c 'import sys; sys.path.append(\"/opt/DiffDock\"); import torch_geometric; print(\"DiffDock dependencies: OK\")'"
+        "docker run --rm $IMAGE_NAME python3 -c 'import sys; sys.path.append(\"$DIFFDOCK_PATH\"); import torch_geometric; print(\"DiffDock dependencies: OK\")'"
     
     run_test "DiffDock environment variables" \
         "docker run --rm $IMAGE_NAME bash -c 'echo \$DIFFDOCK_PATH'"
     
     # Test if DiffDock models are downloaded
     run_test "DiffDock pre-trained models" \
-        "docker run --rm $IMAGE_NAME test -d /opt/DiffDock/workdir/paper_models"
+        "docker run --rm $IMAGE_NAME test -d $DIFFDOCK_PATH/workdir/paper_models"
 }
 
 # Test pipeline scripts

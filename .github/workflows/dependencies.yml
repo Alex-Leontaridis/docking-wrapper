@@ -80,7 +80,7 @@ jobs:
           bandit -r scripts/ utils/ -f json -o bandit-report.json || true
 
       - name: Upload security reports
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: security-reports
           path: |
@@ -129,7 +129,7 @@ jobs:
           pipdeptree --json --output dependency-tree.json
 
       - name: Upload dependency tree
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: dependency-tree
           path: dependency-tree.json 

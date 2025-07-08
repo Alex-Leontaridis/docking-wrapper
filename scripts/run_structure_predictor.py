@@ -1,255 +1,314 @@
-import argparse
+#!/usr/bin/env python3
+"""
+Structure Prediction Runner
+
+Runs various structure prediction tools (ColabFold, OpenFold, ESMFold).
+"""
+
 import os
 import sys
-import hashlib
 import subprocess
 import time
-import json
-import shutil
-import tempfile
 from pathlib import Path
-import logging
+from typing import Optional, Dict, Any
 
-# Setup logging if not already present
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+# Add the project root to the path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
-# Load configuration
-def load_config():
-    config_path = "tools_config.json"
-    if os.path.exists(config_path):
-        with open(config_path, 'r') as f:
-            return json.load(f)
-    return {}
+from utils.logging import setup_logging
 
-# Helper: hash FASTA content for unique cache key
-def fasta_hash(fasta_path):
-    with open(fasta_path, 'rb') as f:
-        content = f.read()
-    return hashlib.sha256(content).hexdigest()[:16]
-
-def ensure_dir(path):
-    if not os.path.exists(path):
-        os.makedirs(path)
-
-def check_cached_pdb(cache_dir, protein_id, hash_id):
-    pdb_path = os.path.join(cache_dir, f"{protein_id}_{hash_id}.pdb")
-    log_path = os.path.join(cache_dir, f"{protein_id}_{hash_id}.log.json")
-    if os.path.isfile(pdb_path):
-        return pdb_path, log_path
-    return None, None
-
-def log_result(log_path, model, runtime, error=None):
-    log = {
-        "model_used": model,
-        "runtime_sec": round(runtime, 2),
-        "error": error
-    }
-    with open(log_path, 'w') as f:
-        json.dump(log, f, indent=2)
-
-def find_pdb_file(search_dir):
-    """Recursively find the first .pdb file in search_dir."""
-    for root, _, files in os.walk(search_dir):
-        for fname in files:
-            if fname.endswith('.pdb'):
-                return os.path.join(root, fname)
-    return None
-
-def run_colabfold(fasta, out_pdb):
-    """Run ColabFold structure prediction"""
-    config = load_config()
-    colabfold_config = config.get("tools", {}).get("colabfold", {})
+def run_colabfold(fasta: str, output_dir: str, **kwargs) -> Dict[str, Any]:
+    """Run ColabFold structure prediction."""
+    logger = setup_logging('ColabFold')
     
-    # Check if ColabFold is available
+    # Validate input
+    if not os.path.exists(fasta):
+        logger.error(f"FASTA file not found: {fasta}", error_code='FILE_NOT_FOUND')
+        return {'success': False, 'error': f'FASTA file not found: {fasta}'}
+    
+    # Build command
+    cmd = [
+        'colabfold_batch',
+        '--type', 'auto',
+        '--num-recycle', '3',
+        '--num-models', '5',
+        '--amber',
+        '--templates',
+        '--use-gpu-relax',
+        fasta,
+        output_dir
+    ]
+    
+    # Add additional parameters
+    for key, value in kwargs.items():
+        if value is not None:
+            cmd.extend([f'--{key}', str(value)])
+    
+    # Run ColabFold
+    start_time = time.time()
     try:
-        import colabfold
-        colabfold_available = True
-    except ImportError:
-        colabfold_available = False
-    
-    if not colabfold_available:
-        return False, "ColabFold not installed. Run: pip install colabfold"
-    
-    tmp_outdir = os.path.dirname(out_pdb)
-    ensure_dir(tmp_outdir)
-    
-    try:
-        # Use colabfold_batch command
-        cmd = [
-            "colabfold_batch",
-            "--stop-at-score", "85",  # Stop when confident
-            "--num-models", "1",      # Generate 1 model for speed
-            fasta,
-            tmp_outdir
-        ]
+        logger.info(f"Running: {' '.join(cmd)}")
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=7200  # 2 hour timeout
+        )
         
-        logging.info(f"[ColabFold] Running: {' '.join(cmd)}")
-        proc = subprocess.run(cmd, check=True, capture_output=True, text=True)
-        
-        # Find the generated PDB file
-        pdb_found = find_pdb_file(tmp_outdir)
-        if pdb_found:
-            shutil.move(pdb_found, out_pdb)
-            # Save log
-            with open(out_pdb + ".colabfold.log", 'w') as f:
-                f.write(proc.stdout + "\n" + proc.stderr)
-            return True, None
+        if result.returncode == 0:
+            elapsed = time.time() - start_time
+            logger.info(f"ColabFold completed in {elapsed:.2f}s")
+            return {
+                'success': True,
+                'output_dir': output_dir,
+                'elapsed_time': elapsed,
+                'stdout': result.stdout,
+                'stderr': result.stderr
+            }
         else:
-            return False, "ColabFold did not produce a .pdb file"
+            logger.error(f"ColabFold failed: {result.stderr}", error_code='COLABFOLD_FAILED')
+            return {
+                'success': False,
+                'error': result.stderr,
+                'returncode': result.returncode,
+                'stdout': result.stdout,
+                'stderr': result.stderr
+            }
             
-    except subprocess.CalledProcessError as e:
-        return False, f"ColabFold failed: {e.stderr}"
+    except subprocess.TimeoutExpired:
+        logger.error("ColabFold timed out after 2 hours", error_code='TIMEOUT_ERROR')
+        return {'success': False, 'error': 'ColabFold timed out after 2 hours'}
+    except FileNotFoundError:
+        logger.error("ColabFold not found. Install with: pip install colabfold", error_code='ENGINE_NOT_FOUND')
+        return {'success': False, 'error': 'ColabFold not found. Install with: pip install colabfold'}
     except Exception as e:
-        return False, f"ColabFold error: {e}"
+        logger.error(f"ColabFold failed: {e}", error_code='SYSTEM_ERROR')
+        return {'success': False, 'error': str(e)}
 
-def run_openfold(fasta, out_pdb):
-    """Run OpenFold structure prediction"""
-    config = load_config()
-    openfold_config = config.get("tools", {}).get("openfold", {})
-    repo_path = openfold_config.get("repo_path", "OpenFold")
+def run_openfold(fasta: str, output_dir: str, **kwargs) -> Dict[str, Any]:
+    """Run OpenFold structure prediction."""
+    logger = setup_logging('OpenFold')
     
-    if not os.path.exists(repo_path):
-        return False, f"OpenFold repository not found at {repo_path}"
+    # Validate input
+    if not os.path.exists(fasta):
+        logger.error(f"FASTA file not found: {fasta}", error_code='FILE_NOT_FOUND')
+        return {'success': False, 'error': f'FASTA file not found: {fasta}'}
     
-    tmp_outdir = os.path.dirname(out_pdb)
-    ensure_dir(tmp_outdir)
+    # Build command
+    cmd = [
+        'openfold',
+        '--fasta_paths', fasta,
+        '--output_dir', output_dir,
+        '--model_device', 'cuda:0',
+        '--config_preset', 'model_1_ptm'
+    ]
     
+    # Add additional parameters
+    for key, value in kwargs.items():
+        if value is not None:
+            cmd.extend([f'--{key}', str(value)])
+    
+    # Run OpenFold
+    start_time = time.time()
     try:
-        # Use OpenFold inference script
-        cmd = [
-            sys.executable,
-            os.path.join(repo_path, "run_pretrained_openfold.py"),
-            fasta,
-            tmp_outdir,
-            "--model_device", "cpu",  # Use CPU for compatibility
-            "--config_preset", "model_1_ptm",
-            "--openfold_checkpoint_path", os.path.join(repo_path, "openfold/resources/openfold_params/finetuning_ptm_1.pt")
-        ]
+        logger.info(f"Running: {' '.join(cmd)}")
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=7200  # 2 hour timeout
+        )
         
-        logging.info(f"[OpenFold] Running: {' '.join(cmd)}")
-        proc = subprocess.run(cmd, check=True, capture_output=True, text=True)
-        
-        # Find the generated PDB file
-        pdb_found = find_pdb_file(tmp_outdir)
-        if pdb_found:
-            shutil.move(pdb_found, out_pdb)
-            # Save log
-            with open(out_pdb + ".openfold.log", 'w') as f:
-                f.write(proc.stdout + "\n" + proc.stderr)
-            return True, None
+        if result.returncode == 0:
+            elapsed = time.time() - start_time
+            logger.info(f"OpenFold completed in {elapsed:.2f}s")
+            return {
+                'success': True,
+                'output_dir': output_dir,
+                'elapsed_time': elapsed,
+                'stdout': result.stdout,
+                'stderr': result.stderr
+            }
         else:
-            return False, "OpenFold did not produce a .pdb file"
+            logger.error(f"OpenFold failed: {result.stderr}", error_code='OPENFOLD_FAILED')
+            return {
+                'success': False,
+                'error': result.stderr,
+                'returncode': result.returncode,
+                'stdout': result.stdout,
+                'stderr': result.stderr
+            }
             
-    except subprocess.CalledProcessError as e:
-        return False, f"OpenFold failed: {e.stderr}"
+    except subprocess.TimeoutExpired:
+        logger.error("OpenFold timed out after 2 hours", error_code='TIMEOUT_ERROR')
+        return {'success': False, 'error': 'OpenFold timed out after 2 hours'}
+    except FileNotFoundError:
+        logger.error("OpenFold not found. Install with: pip install openfold", error_code='ENGINE_NOT_FOUND')
+        return {'success': False, 'error': 'OpenFold not found. Install with: pip install openfold'}
     except Exception as e:
-        return False, f"OpenFold error: {e}"
+        logger.error(f"OpenFold failed: {e}", error_code='SYSTEM_ERROR')
+        return {'success': False, 'error': str(e)}
 
-def run_esmfold(fasta, out_pdb):
-    """Run ESMFold structure prediction"""
-    config = load_config()
-    esmfold_config = config.get("tools", {}).get("esmfold", {})
+def run_esmfold(fasta: str, output_dir: str, **kwargs) -> Dict[str, Any]:
+    """Run ESMFold structure prediction."""
+    logger = setup_logging('ESMFold')
     
-    # Check if ESM is available
+    # Validate input
+    if not os.path.exists(fasta):
+        logger.error(f"FASTA file not found: {fasta}", error_code='FILE_NOT_FOUND')
+        return {'success': False, 'error': f'FASTA file not found: {fasta}'}
+    
+    # Build command
+    cmd = [
+        'esm-fold',
+        '--fasta', fasta,
+        '--output-dir', output_dir,
+        '--num-recycles', '4'
+    ]
+    
+    # Add additional parameters
+    for key, value in kwargs.items():
+        if value is not None:
+            cmd.extend([f'--{key}', str(value)])
+    
+    # Run ESMFold
+    start_time = time.time()
     try:
-        import esm
-        esm_available = True
-    except ImportError:
-        esm_available = False
-    
-    if not esm_available:
-        return False, "ESM not installed. Run: pip install fair-esm"
-    
-    tmp_outdir = os.path.dirname(out_pdb)
-    ensure_dir(tmp_outdir)
-    
-    try:
-        # Use ESMFold command
-        cmd = [
-            sys.executable, "-m", "esm.pretrained.esmfold_v1",
-            fasta,
-            tmp_outdir,
-            "--num-recycles", "1"  # Reduce for speed
-        ]
+        logger.info(f"Running: {' '.join(cmd)}")
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=7200  # 2 hour timeout
+        )
         
-        logging.info(f"[ESMFold] Running: {' '.join(cmd)}")
-        proc = subprocess.run(cmd, check=True, capture_output=True, text=True)
-        
-        # Find the generated PDB file
-        pdb_found = find_pdb_file(tmp_outdir)
-        if pdb_found:
-            shutil.move(pdb_found, out_pdb)
-            # Save log
-            with open(out_pdb + ".esmfold.log", 'w') as f:
-                f.write(proc.stdout + "\n" + proc.stderr)
-            return True, None
+        if result.returncode == 0:
+            elapsed = time.time() - start_time
+            logger.info(f"ESMFold completed in {elapsed:.2f}s")
+            return {
+                'success': True,
+                'output_dir': output_dir,
+                'elapsed_time': elapsed,
+                'stdout': result.stdout,
+                'stderr': result.stderr
+            }
         else:
-            return False, "ESMFold did not produce a .pdb file"
+            logger.error(f"ESMFold failed: {result.stderr}", error_code='ESMFOLD_FAILED')
+            return {
+                'success': False,
+                'error': result.stderr,
+                'returncode': result.returncode,
+                'stdout': result.stdout,
+                'stderr': result.stderr
+            }
             
-    except subprocess.CalledProcessError as e:
-        return False, f"ESMFold failed: {e.stderr}"
+    except subprocess.TimeoutExpired:
+        logger.error("ESMFold timed out after 2 hours", error_code='TIMEOUT_ERROR')
+        return {'success': False, 'error': 'ESMFold timed out after 2 hours'}
+    except FileNotFoundError:
+        logger.error("ESMFold not found. Install with: pip install esm", error_code='ENGINE_NOT_FOUND')
+        return {'success': False, 'error': 'ESMFold not found. Install with: pip install esm'}
     except Exception as e:
-        return False, f"ESMFold error: {e}"
+        logger.error(f"ESMFold failed: {e}", error_code='SYSTEM_ERROR')
+        return {'success': False, 'error': str(e)}
+
+def predict_structure(fasta: str, output_dir: str, model: str = 'auto', **kwargs) -> Dict[str, Any]:
+    """
+    Predict protein structure using the specified model.
+    
+    Args:
+        fasta: Path to FASTA file
+        output_dir: Output directory
+        model: Model to use ('colabfold', 'openfold', 'esmfold', 'auto')
+        **kwargs: Additional parameters
+    
+    Returns:
+        Dictionary with results
+    """
+    logger = setup_logging('StructurePredictor')
+    
+    # Validate input
+    if not os.path.exists(fasta):
+        logger.error(f"FASTA file not found: {fasta}", error_code='FILE_NOT_FOUND')
+        return {'success': False, 'error': f'FASTA file not found: {fasta}'}
+    
+    # Create output directory
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Check for existing structure
+    pdb_path = os.path.join(output_dir, "structure.pdb")
+    log_path = os.path.join(output_dir, "prediction.log")
+    
+    if os.path.exists(pdb_path):
+        logger.info(f"Structure already exists: {pdb_path}")
+        logger.info(f"Log: {log_path}")
+        return {
+            'success': True,
+            'output_file': pdb_path,
+            'cached': True,
+            'message': 'Structure already exists'
+        }
+    
+    # Try different models if auto mode
+    models_to_try = []
+    if model == 'auto':
+        models_to_try = ['colabfold', 'openfold', 'esmfold']
+    else:
+        models_to_try = [model]
+    
+    for model_name in models_to_try:
+        logger.info(f"Trying {model_name}...")
+        
+        if model_name == 'colabfold':
+            result = run_colabfold(fasta, output_dir, **kwargs)
+        elif model_name == 'openfold':
+            result = run_openfold(fasta, output_dir, **kwargs)
+        elif model_name == 'esmfold':
+            result = run_esmfold(fasta, output_dir, **kwargs)
+        else:
+            logger.error(f"Unknown model: {model_name}", error_code='INVALID_VALUE')
+            continue
+        
+        if result['success']:
+            logger.info(f"{model_name} prediction complete. Output: {pdb_path}")
+            return result
+        else:
+            logger.warning(f"{model_name} failed: {result['error']}")
+    
+    # All models failed
+    logger.error(f"All structure predictors failed. See log: {log_path}", error_code='ALL_MODELS_FAILED')
+    logger.info("Try installing tools with: python install_real_tools.py")
+    return {'success': False, 'error': 'All structure predictors failed'}
 
 def main():
-    parser = argparse.ArgumentParser(description="Predict 3D structure from FASTA using ColabFold/OpenFold/ESMFold with caching.")
-    parser.add_argument("--protein", required=True, help="Input protein FASTA file (.fasta)")
-    parser.add_argument("--output_dir", default="data/cache/structures/", help="Directory to save predicted PDB")
-    parser.add_argument("--protein_id", default=None, help="Protein ID for naming (default: basename of FASTA)")
-    parser.add_argument("--prefer", choices=["colabfold", "openfold", "esmfold"], 
-                       help="Prefer a specific tool (default: try all in order)")
-    args = parser.parse_args()
-
-    fasta = args.protein
-    if not os.path.isfile(fasta):
-        logging.error(f"[ERROR] FASTA file not found: {fasta}")
-        sys.exit(1)
-    ensure_dir(args.output_dir)
-    hash_id = fasta_hash(fasta)
-    protein_id = args.protein_id or os.path.splitext(os.path.basename(fasta))[0]
-    pdb_path = os.path.join(args.output_dir, f"{protein_id}_{hash_id}.pdb")
-    log_path = os.path.join(args.output_dir, f"{protein_id}_{hash_id}.log.json")
-
-    # Caching
-    if os.path.isfile(pdb_path):
-        logging.info(f"[CACHE] Structure already exists: {pdb_path}")
-        logging.info(f"[CACHE] Log: {log_path}")
-        sys.exit(0)
-
-    # Define tool order based on preference
-    if args.prefer:
-        tools = [(args.prefer, globals()[f"run_{args.prefer}"])]
-        # Add other tools as fallback
-        all_tools = [("colabfold", run_colabfold), ("openfold", run_openfold), ("esmfold", run_esmfold)]
-        for tool_name, runner in all_tools:
-            if tool_name != args.prefer:
-                tools.append((tool_name, runner))
-    else:
-        tools = [
-            ("colabfold", run_colabfold),
-            ("openfold", run_openfold),
-            ("esmfold", run_esmfold)
-        ]
-
-    # Try models in order
-    start = time.time()
-    for model, runner in tools:
-        logging.info(f"[INFO] Trying {model}...")
-        ok, err = runner(fasta, pdb_path)
-        if ok:
-            elapsed = time.time() - start
-            logging.info(f"[SUCCESS] {model} prediction complete. Output: {pdb_path}")
-            log_result(log_path, model, elapsed)
-            sys.exit(0)
-        else:
-            logging.warning(f"[WARNING] {model} failed: {err}")
+    """Main function for command line usage."""
+    import argparse
     
-    # All failed
-    elapsed = time.time() - start
-    log_result(log_path, None, elapsed, error="All models failed.")
-    logging.error(f"[ERROR] All structure predictors failed. See log: {log_path}")
-    logging.info("[INFO] Try installing tools with: python install_real_tools.py")
-    sys.exit(2)
+    parser = argparse.ArgumentParser(description='Run structure prediction')
+    parser.add_argument('--fasta', required=True, help='FASTA file')
+    parser.add_argument('--output', required=True, help='Output directory')
+    parser.add_argument('--model', default='auto', choices=['colabfold', 'openfold', 'esmfold', 'auto'], 
+                       help='Model to use')
+    
+    args = parser.parse_args()
+    
+    # Setup logging
+    logger = setup_logging('StructurePredictor')
+    
+    # Run prediction
+    result = predict_structure(
+        fasta=args.fasta,
+        output_dir=args.output,
+        model=args.model
+    )
+    
+    if result['success']:
+        logger.info("Structure prediction completed successfully")
+        sys.exit(0)
+    else:
+        logger.error(f"Structure prediction failed: {result['error']}")
+        sys.exit(1)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main() 

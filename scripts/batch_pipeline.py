@@ -414,9 +414,8 @@ class BatchDockingPipeline:
     
     def process_single_ligand(self, ligand_info: Tuple[str, Path], 
                             prepared_protein: str) -> Dict[str, Any]:
-        """Process a single ligand through the complete pipeline."""
+        """Process a single ligand through the complete pipeline with strict error handling."""
         ligand_name, ligand_path = ligand_info
-        
         result = {
             'ligand_name': ligand_name,
             'ligand_path': str(ligand_path),
@@ -425,38 +424,26 @@ class BatchDockingPipeline:
             'timings': {},
             'errors': {}
         }
-        
         stage_start = time.time()
-        
         try:
             self.logger.info(f"Processing ligand: {ligand_name}")
-            
-            # Create ligand-specific output directory
             ligand_output_dir = self.output_dir / "docking_results" / ligand_name
             ligand_output_dir.mkdir(exist_ok=True)
-            
             # Stage 1: Ligand preparation
             self.logger.info(f"[{ligand_name}] Stage 1: Preparing ligand structure")
             stage_start = time.time()
-            
-            # Validate input ligand file
             if not os.path.exists(ligand_path):
                 result['stages']['preparation'] = False
                 result['errors']['preparation'] = f"Ligand file not found: {ligand_path}"
                 result['timings']['preparation'] = time.time() - stage_start
                 self.logger.error(f"[{ligand_name}] Ligand file not found: {ligand_path}")
-                return result
-            
+                return result  # Early exit
             prepared_ligand_dir = self.output_dir / "prepared_structures"
             prepared_ligand = prepared_ligand_dir / f"{ligand_name}_prepared.pdbqt"
-            
             try:
                 prepare_ligand_single(str(ligand_path), str(prepared_ligand))
-                
-                # Validate that preparation actually created the file
                 if not os.path.exists(prepared_ligand):
                     raise Exception("Ligand preparation did not create output file")
-                
                 result['stages']['preparation'] = True
                 result['timings']['preparation'] = time.time() - stage_start
                 self.logger.info(f"[{ligand_name}] Ligand prepared successfully")
@@ -465,11 +452,8 @@ class BatchDockingPipeline:
                 result['errors']['preparation'] = str(e)
                 result['timings']['preparation'] = time.time() - stage_start
                 self.logger.error(f"[{ligand_name}] Ligand preparation failed: {e}")
-                return result
-            
-            # Ensure docking output directories
+                return result  # Early exit
             ensure_single_output_dirs(str(ligand_output_dir))
-            
             # Stage 2: Docking with enabled engines
             enabled_engines = []
             if self.config["engines"]["vina"]["enabled"]:
@@ -478,26 +462,19 @@ class BatchDockingPipeline:
                 enabled_engines.append("gnina")
             if self.config["engines"]["diffdock"]["enabled"]:
                 enabled_engines.append("diffdock")
-            
-            # Validate that we have at least one engine enabled
             if not enabled_engines:
                 result['stages']['docking'] = False
                 result['errors']['docking'] = "No docking engines enabled in configuration"
                 result['timings']['docking'] = time.time() - stage_start
                 self.logger.error(f"[{ligand_name}] No docking engines enabled")
-                return result
-            
-            # Validate that prepared protein exists
+                return result  # Early exit
             if not os.path.exists(prepared_protein):
                 result['stages']['docking'] = False
                 result['errors']['docking'] = f"Prepared protein file not found: {prepared_protein}"
                 result['timings']['docking'] = time.time() - stage_start
                 self.logger.error(f"[{ligand_name}] Prepared protein file not found: {prepared_protein}")
-                return result
-            
+                return result  # Early exit
             self.logger.info(f"[{ligand_name}] Stage 2: Running docking with engines: {enabled_engines}")
-            
-            # Get docking box parameters
             if self.config["box"]["auto_detect"]:
                 try:
                     box_params = extract_box_from_protein(prepared_protein)
@@ -509,12 +486,10 @@ class BatchDockingPipeline:
             else:
                 default_size = self.config["box"]["default_size"]
                 box_params = (0.0, 0.0, 0.0, *default_size)
-            
-            # Run each enabled docking engine
+            # Run each enabled docking engine, fail early if any engine fails
             for engine in enabled_engines:
                 engine_start = time.time()
                 self.logger.info(f"[{ligand_name}] Running {engine.upper()} docking")
-                
                 try:
                     if engine == "vina":
                         status = run_vina(
@@ -536,59 +511,47 @@ class BatchDockingPipeline:
                             str(prepared_ligand), 
                             str(ligand_output_dir)
                         )
-                    
                     result['stages'][engine] = status['success']
                     result['timings'][engine] = time.time() - engine_start
-                    
                     if status['success']:
-                        # Validate that the engine actually produced output files
                         output_files_exist = self._validate_engine_output(engine, str(ligand_output_dir))
                         if not output_files_exist:
                             result['stages'][engine] = False
                             result['errors'][engine] = f"{engine.upper()} reported success but no output files found"
                             self.logger.error(f"[{ligand_name}] {engine.upper()} reported success but no output files found")
+                            return result  # Early exit
                         else:
                             self.logger.info(f"[{ligand_name}] {engine.upper()} completed successfully")
                     else:
                         result['errors'][engine] = status.get('error', 'Unknown error')
                         self.logger.error(f"[{ligand_name}] {engine.upper()} failed: {status.get('error')}")
-                        
+                        return result  # Early exit
                 except Exception as e:
                     result['stages'][engine] = False
                     result['errors'][engine] = str(e)
                     result['timings'][engine] = time.time() - engine_start
                     self.logger.error(f"[{ligand_name}] {engine.upper()} failed with exception: {e}")
-            
+                    return result  # Early exit
             # Stage 3: Results parsing
             self.logger.info(f"[{ligand_name}] Stage 3: Parsing docking results")
             parsing_start = time.time()
-            
             try:
-                # Ensure parser output directory exists
                 parser_output_dir = self.output_dir / "parsed_results" / ligand_name
                 parser_output_dir.mkdir(parents=True, exist_ok=True)
-                
                 parser = DockingResultsParser(
                     base_dir=str(ligand_output_dir),
                     output_dir=str(parser_output_dir)
                 )
-                
                 summary_df = parser.generate_summary(ligand_name=ligand_name)
-                
                 if not summary_df.empty:
-                    # Save ligand-specific results
                     ligand_results_dir = self.output_dir / "parsed_results" / ligand_name
                     ligand_results_dir.mkdir(exist_ok=True)
-                    
                     summary_file = ligand_results_dir / f"{ligand_name}_summary.csv"
                     summary_df.to_csv(summary_file, index=False)
-                    
-                    # Save failed runs
                     if parser.failed_runs:
                         failed_file = ligand_results_dir / f"{ligand_name}_failed.json"
                         with open(failed_file, 'w') as f:
                             json.dump(parser.failed_runs, f, indent=2)
-                    
                     result['stages']['parsing'] = True
                     result['summary_file'] = str(summary_file)
                     result['poses_found'] = len(summary_df)
@@ -597,34 +560,24 @@ class BatchDockingPipeline:
                     result['stages']['parsing'] = False
                     result['errors']['parsing'] = "No poses found in results"
                     self.logger.warning(f"[{ligand_name}] Parsing completed but no poses found")
-                
+                    return result  # Early exit
                 result['timings']['parsing'] = time.time() - parsing_start
-                
             except Exception as e:
                 result['stages']['parsing'] = False
                 result['errors']['parsing'] = str(e)
                 result['timings']['parsing'] = time.time() - parsing_start
                 self.logger.error(f"[{ligand_name}] Results parsing failed: {e}")
-            
-            # Determine overall success
-            any_docking_success = any(result['stages'].get(engine, False) for engine in enabled_engines)
-            parsing_success = result['stages'].get('parsing', False)
-            
-            result['success'] = any_docking_success and parsing_success
+                return result  # Early exit
+            # If we reach here, all steps succeeded
+            result['success'] = True
             result['total_time'] = time.time() - stage_start
-            
-            if result['success']:
-                self.logger.info(f"[{ligand_name}] Processing completed successfully in {result['total_time']:.1f}s")
-            else:
-                self.logger.warning(f"[{ligand_name}] Processing completed with issues in {result['total_time']:.1f}s")
-            
+            self.logger.info(f"[{ligand_name}] Processing completed successfully in {result['total_time']:.1f}s")
         except Exception as e:
             result['success'] = False
             result['errors']['general'] = str(e)
             result['total_time'] = time.time() - stage_start
             self.logger.error(f"[{ligand_name}] Processing failed: {e}")
             self.logger.debug(f"[{ligand_name}] Traceback: {traceback.format_exc()}")
-        
         return result
     
     def _validate_engine_output(self, engine: str, output_dir: str) -> bool:
