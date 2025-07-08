@@ -5,10 +5,12 @@ Tests each of the 6 major bugs that were fixed.
 """
 
 import os
+from utils.path_manager import get_path_manager, get_path, get_absolute_path, ensure_dir
 import sys
 import tempfile
 import shutil
 import logging
+from utils.logging import setup_logging, log_startup, log_shutdown, log_error_with_context
 from pathlib import Path
 import json
 
@@ -17,9 +19,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'script
 
 def setup_test_logging():
     """Setup logging for tests."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(message)s',
+    logger = setup_logging(__name__)s [%(levelname)s] %(message)s',
         handlers=[
             logging.StreamHandler(sys.stdout)
         ]

@@ -3,14 +3,23 @@ import argparse
 import os
 import sys
 import logging
-from pathlib import Path
 import subprocess
 import json
 import time
 import numpy as np
 import shutil
-from config import config
 import platform
+from pathlib import Path
+
+# Add current directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Setup logging first
+from utils.logging import setup_logging as setup_docking_logging
+from utils.path_manager import get_path_manager, get_path, get_absolute_path, ensure_dir
+
+# Import config after logging is set up
+from config import config
 
 # --- Constants for output directories ---
 VINA_OUT = 'vina_output'
@@ -20,19 +29,13 @@ LOGS_DIR = 'logs'
 LOG_FILE = os.path.join(LOGS_DIR, 'docking_run.log')
 
 # --- Setup logging ---
-def setup_logging():
-    os.makedirs(LOGS_DIR, exist_ok=True)
-    logging.basicConfig(
-        filename=LOG_FILE,
-        filemode='a',
-        format='%(asctime)s %(levelname)s: %(message)s',
-        level=logging.INFO
-    )
-    console = logging.StreamHandler()
-    console.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(levelname)s: %(message)s')
-    console.setFormatter(formatter)
-    logging.getLogger('').addHandler(console)
+from utils.logging import setup_logging as setup_docking_logging
+
+# Create logs directory if it doesn't exist
+ensure_dir(LOGS_DIR)
+
+# Configure logging
+logger = setup_docking_logging(__name__)
 
 # --- Ensure output directories exist ---
 def ensure_output_dirs(base_dir):
@@ -42,7 +45,7 @@ def ensure_output_dirs(base_dir):
 # --- Validate input files ---
 def validate_file(path, desc):
     if not path or not os.path.isfile(path):
-        logging.error(f"{desc} file '{path}' does not exist or is not a file.")
+        logger.error(f"{desc} file '{path}' does not exist or is not a file.")
         sys.exit(1)
 
 def extract_box_from_protein(protein_path):
@@ -105,7 +108,7 @@ def extract_box_from_protein(protein_path):
         min_xyz = coords.min(axis=0)
         max_xyz = coords.max(axis=0)
         size = (max_xyz - min_xyz) + 8.0  # 8 Å padding
-        logging.info(f'Strategy 1: Using bound ligand ({len(ligand_atoms)} atoms)')
+        logger.info(f'Strategy 1: Using bound ligand ({len(ligand_atoms)} atoms)')
         return tuple(center) + tuple(size)
     
     # Strategy 2: Cavity detection using protein geometry
@@ -121,7 +124,7 @@ def extract_box_from_protein(protein_path):
             best_cavity = max(cavities, key=lambda c: c['volume'])
             center = best_cavity['center']
             size = best_cavity['size']
-            logging.info(f'Strategy 2: Using largest detected cavity (volume: {best_cavity["volume"]:.1f} A^3)')
+            logger.info(f'Strategy 2: Using largest detected cavity (volume: {best_cavity["volume"]:.1f} A^3)')
             return tuple(center) + tuple(size)
     
     # Strategy 3: Geometric center of protein as fallback
@@ -137,11 +140,11 @@ def extract_box_from_protein(protein_path):
         # Use 40% of protein span or minimum 20Å, maximum 30Å per dimension
         size = np.clip(protein_span * 0.4, 20.0, 30.0)
         
-        logging.info(f'Strategy 3: Using protein geometric center with conservative box size')
+        logger.info(f'Strategy 3: Using protein geometric center with conservative box size')
         return tuple(center) + tuple(size)
     
     # Strategy 4: Last resort - default values
-    logging.warning('Strategy 4: No protein atoms found, using default center and box size')
+    logger.warning('Strategy 4: No protein atoms found, using default center and box size')
     return (0.0, 0.0, 0.0, 25.0, 25.0, 25.0)
 
 # Cluster cavity points to find distinct cavities
@@ -149,7 +152,7 @@ try:
     from sklearn.cluster import DBSCAN
     SKLEARN_AVAILABLE = True
 except ImportError:
-    logging.error("scikit-learn is required for cavity clustering but is not installed. Install it with: pip install scikit-learn")
+    logger.error("scikit-learn is required for cavity clustering but is not installed. Install it with: pip install scikit-learn")
     SKLEARN_AVAILABLE = False
 
 def find_protein_cavities(protein_coords, grid_spacing=2.0, probe_radius=1.4):
@@ -226,11 +229,11 @@ def find_protein_cavities(protein_coords, grid_spacing=2.0, probe_radius=1.4):
                     'points': len(cluster_points)
                 })
         except Exception as e:
-            logging.warning(f'sklearn DBSCAN failed, using simplified cavity detection: {e}')
+            logger.warning(f'sklearn DBSCAN failed, using simplified cavity detection: {e}')
             # fallback below
     else:
         # Fallback if sklearn not available: use simple geometric clustering
-        logging.warning('sklearn not available, using simplified cavity detection')
+        logger.warning('sklearn not available, using simplified cavity detection')
         
         # Simple approach: find the most central cavity region
         if len(cavity_coords) >= 5:
@@ -257,15 +260,127 @@ def find_protein_cavities(protein_coords, grid_spacing=2.0, probe_radius=1.4):
     
     return cavities
 
+def find_binary(binary_name, env_var=None, config_path=None):
+    """
+    Search for a binary in the following order:
+    1. Current working directory (highest priority)
+    2. Config path (if provided)
+    3. Environment variable (if provided)
+    4. PATH
+    5. For Windows: Check WSL if binary is Linux-only (like GNINA)
+    Returns the path to the binary or None if not found.
+    """
+    import shutil
+    import os
+    import platform
+    
+    cwd = os.getcwd()
+    # 1. Current working directory (highest priority for local binaries)
+    local_path = os.path.join(cwd, binary_name)
+    if os.path.isfile(local_path):
+        logger.info(f"Found {binary_name} in current directory: {local_path}")
+        return local_path
+    
+    # Check for .bat files on Windows (for dummy scripts)
+    if platform.system().lower() == 'windows':
+        base_name = os.path.splitext(binary_name)[0]  # Remove .exe if present
+        bat_path = os.path.join(cwd, f'{base_name}.bat')
+        if os.path.isfile(bat_path):
+            logger.info(f"Found {base_name}.bat in current directory: {bat_path}")
+            return bat_path
+    
+    # Special case: gnina.exe or gnina in current directory
+    if binary_name == 'gnina':
+        for ext in ('', '.exe', '.bat'):
+            gnina_local = os.path.join(cwd, f'gnina{ext}')
+            if os.path.isfile(gnina_local):
+                logger.info(f"Found gnina in current directory: {gnina_local}")
+                return gnina_local
+    # 2. Config path
+    if config_path and os.path.isfile(config_path):
+        logger.info(f"Found {binary_name} via config: {config_path}")
+        return config_path
+    # 3. Environment variable
+    if env_var and os.environ.get(env_var):
+        env_path = os.environ[env_var]
+        if os.path.isfile(env_path):
+            logger.info(f"Found {binary_name} via environment variable {env_var}: {env_path}")
+            return env_path
+    # 4. PATH
+    which_path = shutil.which(binary_name)
+    if which_path:
+        logger.info(f"Found {binary_name} in PATH: {which_path}")
+        return which_path
+    # 5. For Windows: Check WSL for Linux-only binaries
+    if platform.system().lower() == 'windows':
+        try:
+            result = subprocess.run(['wsl', 'which', binary_name], 
+                                  capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                wsl_path = result.stdout.strip()
+                if wsl_path:
+                    logger.info(f"Found {binary_name} in WSL: {wsl_path}")
+                    return f"wsl:{wsl_path}"  # Mark as WSL binary
+        except:
+            pass
+    logger.warning(f"Binary {binary_name} not found in any location")
+    return None
+
+# Platform-specific engine availability
+system = platform.system().lower()
+
+# GNINA: Linux only, but allow on Windows/Mac if WSL is available
+if system in ['windows', 'darwin']:  # Windows or Mac
+    # Check if WSL is available
+    try:
+        result = subprocess.run(['wsl', '--list', '--quiet'], 
+                              capture_output=True, text=True, timeout=10)
+        if result.returncode == 0 and result.stdout.strip():
+            logger.info(f"WSL detected on {system.capitalize()}. GNINA will be available via WSL.")
+            # Keep GNINA enabled if WSL is available
+        else:
+            # Only disable GNINA if config has the attribute
+            if hasattr(config, 'engines') and 'gnina' in config.engines:
+                config.engines["gnina"]["enabled"] = False
+            logger.info(f"GNINA is not available on {system.capitalize()}. GNINA features will be disabled.")
+    except:
+        # Only disable GNINA if config has the attribute
+        if hasattr(config, 'engines') and 'gnina' in config.engines:
+            config.engines["gnina"]["enabled"] = False
+        logger.info(f"GNINA is not available on {system.capitalize()}. GNINA features will be disabled.")
+
+# UMol: Linux only  
+if system in ['windows', 'darwin']:  # Windows or Mac
+    # Only disable UMol if config has the attribute
+    if hasattr(config, 'ml_models') and 'umol' in config.ml_models:
+        config.ml_models["umol"]["enabled"] = False
+    logger.info(f"UMol is not available on {system.capitalize()}. UMol features will be disabled.")
+elif system == 'linux':
+    logger.info("UMol is available on Linux. UMol features will be enabled if configured.")
+
+# Log platform detection
+logger.info(f"Detected platform: {system.capitalize()}")
+logger.info(f"Available engines: Vina (all platforms), GNINA (Linux/WSL), DiffDock (all platforms)")
+logger.info(f"Available ML models: EquiBind (all platforms), NeuralPLexer (all platforms), UMol (Linux only)")
+
 def run_vina(protein, ligand, output_dir, box_params):
     """Run AutoDock Vina CLI."""
-    vina_bin = config.vina_path
+    vina_bin = find_binary('vina', env_var='VINA_PATH', config_path=getattr(config, 'vina_path', None))
+    
+    if not vina_bin:
+        return {
+            'success': False,
+            'error': 'Vina binary not found. Please ensure vina.exe is in the current directory or set VINA_PATH.',
+            'time': 0.0
+        }
+    
     vina_out = os.path.join(output_dir, VINA_OUT, 'vina_out.pdbqt')
     status = {'success': False, 'error': None, 'time': None}
     start = time.time()
     try:
         if not all(box_params):
             raise ValueError('All box parameters (center_x, center_y, center_z, size_x, size_y, size_z) are required for Vina.')
+        
         cmd = [
             vina_bin,
             '--receptor', protein,
@@ -278,15 +393,15 @@ def run_vina(protein, ligand, output_dir, box_params):
             '--size_z', str(box_params[5]),
             '--out', vina_out
         ]
-        logging.info(f'Running Vina: {" ".join(cmd)}')
+        logger.info(f'Running Vina: {" ".join(cmd)}')
         subprocess.run(cmd, check=True)
         if not os.path.isfile(vina_out):
             raise RuntimeError('Vina did not produce output file.')
         status['success'] = True
-        logging.info('Vina docking completed successfully.')
+        logger.info('Vina docking completed successfully.')
     except Exception as e:
         status['error'] = str(e)
-        logging.error(f'[Vina] Docking failed: {e}', exc_info=True)
+        logger.error(f'[Vina] Docking failed: {e}', exc_info=True)
     status['time'] = round(time.time() - start, 2)
     return status
 
@@ -298,7 +413,7 @@ def load_backend_config():
             with open(config_file, 'r') as f:
                 return json.load(f)
         except Exception as e:
-            logging.warning(f"Failed to load backend config: {e}")
+            logger.warning(f"Failed to load backend config: {e}")
     return None
 
 def find_gnina_binary():
@@ -306,12 +421,12 @@ def find_gnina_binary():
     # Check environment variable first
     gnina_path = os.environ.get('GNINA_PATH')
     if gnina_path and os.path.isfile(gnina_path):
-        logging.info(f"Found GNINA binary from environment: {gnina_path}")
+        logger.info(f"Found GNINA binary from environment: {gnina_path}")
         return gnina_path
     
     # Check if gnina is in PATH
     if shutil.which('gnina'):
-        logging.info("Found GNINA binary in PATH")
+        logger.info("Found GNINA binary in PATH")
         return 'gnina'
     
     # Platform-specific common locations
@@ -341,10 +456,10 @@ def find_gnina_binary():
     
     for path in possible_paths:
         if shutil.which(path):
-            logging.info(f"Found GNINA binary at: {path}")
+            logger.info(f"Found GNINA binary at: {path}")
             return path
     
-    logging.warning("GNINA binary not found. Please set GNINA_PATH environment variable or install GNINA.")
+    logger.warning("GNINA binary not found. Please set GNINA_PATH environment variable or install GNINA.")
     return None
 
 def _is_dummy_diffdock_script(script_path):
@@ -361,7 +476,7 @@ def _is_dummy_diffdock_script(script_path):
         # Check file size first (dummy scripts are usually small)
         file_size = os.path.getsize(script_path)
         if file_size < 1000:  # Less than 1KB is suspicious
-            logging.warning(f"DiffDock script is very small ({file_size} bytes), likely a dummy")
+            logger.warning(f"DiffDock script is very small ({file_size} bytes), likely a dummy")
             return True
         
         with open(script_path, 'r', encoding='utf-8') as f:
@@ -383,7 +498,7 @@ def _is_dummy_diffdock_script(script_path):
         # Check if any dummy indicators are present
         for indicator in dummy_indicators:
             if indicator.lower() in content.lower():
-                logging.warning(f"Found dummy script indicator: '{indicator}' in {script_path}")
+                logger.warning(f"Found dummy script indicator: '{indicator}' in {script_path}")
                 return True
         
         # Check for real DiffDock indicators
@@ -405,35 +520,34 @@ def _is_dummy_diffdock_script(script_path):
         
         # If we have very few real indicators, it's likely a dummy
         if real_count < 3:
-            logging.warning(f"DiffDock script has only {real_count} real indicators, likely a dummy")
+            logger.warning(f"DiffDock script has only {real_count} real indicators, likely a dummy")
             return True
         
         # Check for proper imports and structure
         if 'import' not in content or 'def ' not in content:
-            logging.warning("DiffDock script lacks proper Python structure")
+            logger.warning("DiffDock script lacks proper Python structure")
             return True
         
         # If we get here, it looks like a real script
         return False
         
     except Exception as e:
-        logging.warning(f"Could not analyze DiffDock script {script_path}: {e}")
+        logger.warning(f"Could not analyze DiffDock script {script_path}: {e}")
         # If we can't read the file, assume it's not a dummy to be safe
         return False
 
 def find_diffdock_script():
     """
     Find DiffDock inference script using environment variables and platform detection.
-    
     Returns:
         str or None: Path to the DiffDock script, or None if not found or dummy detected
     """
-    logger = setup_logging('DiffDock')
-    
+    logger = setup_docking_logging('DiffDock')
     # Check environment variable first
     diffdock_path = os.environ.get('DIFFDOCK_PATH')
     if diffdock_path:
         script_path = os.path.join(diffdock_path, 'inference.py')
+        logger.info(f"Checking DIFFDOCK_PATH: {script_path}")
         if os.path.isfile(script_path):
             if _is_dummy_diffdock_script(script_path):
                 logger.warning(f"Found DiffDock dummy script from environment: {script_path}")
@@ -445,27 +559,55 @@ def find_diffdock_script():
                 return script_path
         else:
             logger.warning(f"DIFFDOCK_PATH set to {diffdock_path} but inference.py not found")
-    
-    # Platform-specific common locations
+    # Check current working directory for DiffDock directory
+    cwd = os.getcwd()
+    local_diffdock = os.path.join(cwd, 'DiffDock')
+    logger.info(f"Checking local DiffDock directory: {local_diffdock}")
+    if os.path.isdir(local_diffdock):
+        script_path = os.path.join(local_diffdock, 'inference.py')
+        logger.info(f"Checking for inference.py: {script_path}")
+        if os.path.isfile(script_path):
+            if _is_dummy_diffdock_script(script_path):
+                logger.warning(f"Found DiffDock dummy script at: {script_path}")
+                logger.warning("This is a placeholder script. Please install the real DiffDock.")
+                logger.info("Install DiffDock with: git clone https://github.com/gcorso/DiffDock.git")
+                return None
+            else:
+                logger.info(f"Found DiffDock script at: {script_path}")
+                return script_path
+    # Also check lowercase 'diffdock' directory
+    local_diffdock_lower = os.path.join(cwd, 'diffdock')
+    logger.info(f"Checking local diffdock directory: {local_diffdock_lower}")
+    if os.path.isdir(local_diffdock_lower):
+        script_path = os.path.join(local_diffdock_lower, 'inference.py')
+        logger.info(f"Checking for inference.py: {script_path}")
+        if os.path.isfile(script_path):
+            if _is_dummy_diffdock_script(script_path):
+                logger.warning(f"Found DiffDock dummy script at: {script_path}")
+                logger.warning("This is a placeholder script. Please install the real DiffDock.")
+                logger.info("Install DiffDock with: git clone https://github.com/gcorso/DiffDock.git")
+                return None
+            else:
+                logger.info(f"Found DiffDock script at: {script_path}")
+                return script_path
+    # Platform-specific common locations (without hardcoded paths)
     system = platform.system().lower()
     if system == 'windows':
         possible_paths = [
-            'DiffDock\\inference.py',  # Current directory
-            '.\\DiffDock\\inference.py',  # Relative path
-            os.path.expanduser('~\\DiffDock\\inference.py'),  # User home
-            'C:\\DiffDock\\inference.py',  # System installation
+            os.path.join(os.path.expanduser('~'), 'DiffDock', 'inference.py'),  # User home
+            os.path.join(os.environ.get('PROGRAMFILES', 'C:\\Program Files'), 'DiffDock', 'inference.py'),  # Program Files
         ]
     else:  # Linux/macOS
         possible_paths = [
-            'DiffDock/inference.py',  # Current directory
-            './DiffDock/inference.py',  # Relative path
+            os.path.join(cwd, 'DiffDock', 'inference.py'),  # Current directory
+            os.path.join(cwd, 'diffdock', 'inference.py'),  # Current directory
+            os.path.join(os.path.expanduser('~'), 'DiffDock', 'inference.py'),  # User home
             '/opt/DiffDock/inference.py',  # Docker installation
-            os.path.expanduser('~/DiffDock/inference.py'),  # User home
             '/usr/local/DiffDock/inference.py',  # System installation
             '/usr/share/DiffDock/inference.py',  # Alternative system location
         ]
-    
     for path in possible_paths:
+        logger.info(f"Checking possible path: {path}")
         if os.path.isfile(path):
             if _is_dummy_diffdock_script(path):
                 logger.warning(f"Found DiffDock dummy script at: {path}")
@@ -475,52 +617,92 @@ def find_diffdock_script():
             else:
                 logger.info(f"Found DiffDock script at: {path}")
                 return path
-    
     logger.warning("DiffDock inference script not found. Please set DIFFDOCK_PATH environment variable or install DiffDock.")
     logger.info("Install DiffDock with: git clone https://github.com/gcorso/DiffDock.git")
     return None
 
 def run_gnina(protein, ligand, output_dir, use_gpu=False):
     """Run GNINA CLI for docking and scoring."""
-    gnina_bin = config.gnina_path
-    if not gnina_bin or not shutil.which(gnina_bin):
+    gnina_bin = find_binary('gnina', env_var='GNINA_PATH', config_path=getattr(config, 'gnina_path', None))
+    
+    if not gnina_bin:
         return {
             'success': False,
-            'error': 'GNINA binary not found. Please set GNINA_PATH or install GNINA.',
+            'error': 'GNINA binary not found. Please ensure gnina is in the current directory or set GNINA_PATH.',
             'time': 0.0
         }
-    gnina_out = os.path.join(output_dir, GNINA_OUT, 'gnina_out.pdbqt')
-    gnina_log = os.path.join(output_dir, GNINA_OUT, 'gnina.log')
-    gnina_score = os.path.join(output_dir, GNINA_OUT, 'gnina_scores.txt')
-    os.makedirs(os.path.dirname(gnina_out), exist_ok=True)
-    cmd = [
-        gnina_bin,
-        '--receptor', protein,
-        '--ligand', ligand,
-        '--out', gnina_out,
-        '--log', gnina_log
-    ]
-    if use_gpu:
-        cmd.append('--gpu')
-    cmd.extend(['--score_only', '--scorefile', gnina_score])
+    
+    # Check if GNINA is a WSL binary
+    if gnina_bin.startswith('wsl:'):
+        # Extract the WSL path
+        wsl_path = gnina_bin[4:]  # Remove 'wsl:' prefix
+        gnina_bin = ['wsl', wsl_path]
+    else:
+        # Check if this is a batch file on Windows
+        if platform.system().lower() == 'windows' and gnina_bin.endswith('.bat'):
+            # It's a Windows batch file, run directly
+            gnina_bin = [gnina_bin]
+        else:
+            # Check if this is a Linux binary on Windows
+            if platform.system().lower() == 'windows':
+                try:
+                    # Try to execute the binary to see if it's a valid Windows executable
+                    result = subprocess.run([gnina_bin, '--version'], 
+                                          capture_output=True, text=True, timeout=10)
+                    if result.returncode != 0:
+                        # If it fails, it might be a Linux binary - try WSL
+                        logger.info(f"GNINA appears to be a Linux binary. Attempting to run via WSL.")
+                        gnina_bin = ['wsl', gnina_bin]
+                except (subprocess.TimeoutExpired, OSError, FileNotFoundError):
+                    # If execution fails, try WSL
+                    logger.info(f"GNINA execution failed. Attempting to run via WSL.")
+                    gnina_bin = ['wsl', gnina_bin]
+            else:
+                gnina_bin = [gnina_bin]
+    
+    gnina_out_dir = os.path.join(output_dir, GNINA_OUT)
+    ensure_dir(gnina_out_dir)
+    
     status = {'success': False, 'error': None, 'time': None}
     start = time.time()
+    
     try:
-        logging.info(f'Running GNINA: {" ".join(cmd)}')
-        subprocess.run(cmd, check=True)
-        if not os.path.isfile(gnina_out):
-            raise RuntimeError('GNINA did not produce output file.')
+        # Build GNINA command
+        cmd = gnina_bin + [
+            '--receptor', protein,
+            '--ligand', ligand,
+            '--out', os.path.join(gnina_out_dir, 'gnina_out.sdf'),
+            '--num_modes', '9',
+            '--exhaustiveness', '8'
+        ]
+        
+        if use_gpu:
+            cmd.append('--gpu')
+        
+        logger.info(f'Running GNINA: {" ".join(cmd)}')
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        
+        # Check if output was produced
+        output_files = list(Path(gnina_out_dir).glob('*.sdf'))
+        if not output_files:
+            raise RuntimeError('GNINA did not produce any SDF output files.')
+        
         status['success'] = True
-        logging.info('GNINA docking completed successfully.')
+        logger.info(f'GNINA completed successfully. Generated {len(output_files)} poses.')
+        
+    except subprocess.CalledProcessError as e:
+        status['error'] = f"GNINA failed with exit code {e.returncode}: {e.stderr}"
+        logger.error(f'[GNINA] Docking failed: {status["error"]}')
     except Exception as e:
         status['error'] = str(e)
-        logging.error(f'[GNINA] Docking failed: {e}', exc_info=True)
+        logger.error(f'[GNINA] Docking failed: {e}', exc_info=True)
+    
     status['time'] = round(time.time() - start, 2)
     return status
 
 def run_diffdock(protein, ligand, output_dir):
     """Run DiffDock for pose prediction."""
-    diffdock_script = os.path.join(config.diffdock_path, 'inference.py')
+    diffdock_script = find_binary('inference.py', env_var='DIFFDOCK_PATH', config_path=getattr(config, 'diffdock_path', None))
     if not os.path.isfile(diffdock_script):
         return {
             'success': False,
@@ -528,7 +710,7 @@ def run_diffdock(protein, ligand, output_dir):
             'time': 0.0
         }
     diffdock_out_dir = os.path.join(output_dir, DIFFDOCK_OUT)
-    os.makedirs(diffdock_out_dir, exist_ok=True)
+    ensure_dir(diffdock_out_dir)
     status = {'success': False, 'error': None, 'time': None}
     start = time.time()
     
@@ -562,7 +744,7 @@ def run_diffdock(protein, ligand, output_dir):
             '--batch_size', '10'
         ]
         
-        logging.info(f'Running DiffDock: {" ".join(cmd)}')
+        logger.info(f'Running DiffDock: {" ".join(cmd)}')
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
         
         # Clean up temporary file
@@ -574,11 +756,11 @@ def run_diffdock(protein, ligand, output_dir):
             raise RuntimeError('DiffDock did not produce any SDF output files.')
         
         status['success'] = True
-        logging.info(f'DiffDock completed successfully. Generated {len(output_files)} poses.')
+        logger.info(f'DiffDock completed successfully. Generated {len(output_files)} poses.')
         
     except subprocess.CalledProcessError as e:
         status['error'] = f"DiffDock failed with exit code {e.returncode}: {e.stderr}"
-        logging.error(f'[DiffDock] Docking failed: {status["error"]}')
+        logger.error(f'[DiffDock] Docking failed: {status["error"]}')
         if 'csv_file' in locals():
             try:
                 os.unlink(csv_file)
@@ -586,7 +768,7 @@ def run_diffdock(protein, ligand, output_dir):
                 pass
     except Exception as e:
         status['error'] = str(e)
-        logging.error(f'[DiffDock] Docking failed: {e}', exc_info=True)
+        logger.error(f'[DiffDock] Docking failed: {e}', exc_info=True)
         if 'csv_file' in locals():
             try:
                 os.unlink(csv_file)
@@ -615,7 +797,7 @@ def run_batch_docking(protein_files, ligand_files, output_base_dir, use_gnina=Fa
     total_combinations = len(protein_files) * len(ligand_files)
     current_combo = 0
     
-    logging.info(f"Starting batch docking: {len(protein_files)} proteins × {len(ligand_files)} ligands = {total_combinations} combinations")
+    logger.info(f"Starting batch docking: {len(protein_files)} proteins × {len(ligand_files)} ligands = {total_combinations} combinations")
     
     for protein_file in protein_files:
         protein_name = os.path.splitext(os.path.basename(protein_file))[0]
@@ -625,7 +807,7 @@ def run_batch_docking(protein_files, ligand_files, output_base_dir, use_gnina=Fa
             ligand_name = os.path.splitext(os.path.basename(ligand_file))[0]
             combo_name = f"{protein_name}_{ligand_name}"
             
-            logging.info(f"Processing combination {current_combo}/{total_combinations}: {combo_name}")
+            logger.info(f"Processing combination {current_combo}/{total_combinations}: {combo_name}")
             
             # Create unique output directory for this combination
             combo_output_dir = os.path.join(output_base_dir, combo_name)
@@ -637,7 +819,7 @@ def run_batch_docking(protein_files, ligand_files, output_base_dir, use_gnina=Fa
                     cx, cy, cz, sx, sy, sz = extract_box_from_protein(protein_file)
                     current_box_params = [cx, cy, cz, sx, sy, sz]
                 except Exception as e:
-                    logging.error(f"Failed to extract box parameters for {protein_file}: {e}")
+                    logger.error(f"Failed to extract box parameters for {protein_file}: {e}")
                     batch_results[combo_name] = {'error': f'Box extraction failed: {e}'}
                     continue
             else:
@@ -690,7 +872,7 @@ def run_batch_docking(protein_files, ligand_files, output_base_dir, use_gnina=Fa
                 with open(failed_json, 'w') as f:
                     json.dump(failed_runs, f, indent=2)
     
-    logging.info(f"Batch docking completed: {current_combo} combinations processed")
+    logger.info(f"Batch docking completed: {current_combo} combinations processed")
     return batch_results
 
 
@@ -727,8 +909,8 @@ def main():
 
     # Setup logging and output dirs
     ensure_output_dirs(args.output_dir)
-    setup_logging()
-    logging.info('Starting docking wrapper')
+    # Logging is already set up at module level
+    logger.info('Starting docking wrapper')
 
     # Determine if we're in batch mode
     if args.batch_proteins or args.batch_ligands:
@@ -746,9 +928,9 @@ def main():
         box_params = None
         if all(p is not None for p in [args.center_x, args.center_y, args.center_z, args.size_x, args.size_y, args.size_z]):
             box_params = [args.center_x, args.center_y, args.center_z, args.size_x, args.size_y, args.size_z]
-            logging.info('Using provided box parameters for all combinations')
+            logger.info('Using provided box parameters for all combinations')
         else:
-            logging.info('Box parameters will be auto-detected for each protein')
+            logger.info('Box parameters will be auto-detected for each protein')
         
         # Run batch docking
         batch_results = run_batch_docking(
@@ -781,14 +963,14 @@ def main():
         box_params = [args.center_x, args.center_y, args.center_z, args.size_x, args.size_y, args.size_z]
         if not all(p is not None for p in box_params):
             try:
-                logging.info('Box parameters not provided. Attempting to extract from protein file...')
+                logger.info('Box parameters not provided. Attempting to extract from protein file...')
                 cx, cy, cz, sx, sy, sz = extract_box_from_protein(args.protein)
                 args.center_x, args.center_y, args.center_z = cx, cy, cz
                 args.size_x, args.size_y, args.size_z = sx, sy, sz
                 box_params = [cx, cy, cz, sx, sy, sz]
-                logging.info(f'Extracted box center: ({cx:.2f}, {cy:.2f}, {cz:.2f}), size: ({sx:.2f}, {sy:.2f}, {sz:.2f})')
+                logger.info(f'Extracted box center: ({cx:.2f}, {cy:.2f}, {cz:.2f}), size: ({sx:.2f}, {sy:.2f}, {sz:.2f})')
             except Exception as e:
-                logging.error(f'Failed to extract box parameters: {e}')
+                logger.error(f'Failed to extract box parameters: {e}')
                 print(f'ERROR: {e}')
                 sys.exit(1)
 
@@ -806,7 +988,7 @@ def main():
                 sys.exit(1)
         else:
             msg = 'Vina skipped: All box parameters (--center_x, --center_y, --center_z, --size_x, --size_y, --size_z) must be provided.'
-            logging.warning(msg)
+            logger.warning(msg)
             backend_status['vina'] = {'success': False, 'error': msg, 'time': 0.0}
 
         # Optionally run GNINA
@@ -828,9 +1010,9 @@ def main():
             failed_json = os.path.join(args.output_dir, LOGS_DIR, 'failed_runs.json')
             with open(failed_json, 'w') as f:
                 json.dump(failed_runs, f, indent=2)
-            logging.info(f'Failed runs logged in {failed_json}')
+            logger.info(f'Failed runs logged in {failed_json}')
         else:
-            logging.info('All selected backends completed successfully.')
+            logger.info('All selected backends completed successfully.')
 
         # Print final summary to console
         print("\n=== Docking Summary ===")

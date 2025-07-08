@@ -8,6 +8,7 @@ Uses fpocket CLI tool to identify and score potential binding pockets.
 
 import argparse
 import os
+from utils.path_manager import get_path_manager, get_path, get_absolute_path, ensure_dir
 import sys
 import json
 import subprocess
@@ -327,7 +328,7 @@ def main():
         result["runtime_sec"] = round(time.time() - start_time, 2)
         
         # Ensure output directory exists
-        os.makedirs(os.path.dirname(args.output), exist_ok=True)
+        ensure_dir(os.path.dirname(args.output))
         
         # Save results
         with open(args.output, 'w') as f:
@@ -346,7 +347,7 @@ def main():
         result["runtime_sec"] = round(time.time() - start_time, 2)
         
         # Save error result
-        os.makedirs(os.path.dirname(args.output), exist_ok=True)
+        ensure_dir(os.path.dirname(args.output))
         with open(args.output, 'w') as f:
             json.dump(result, f, indent=2)
         

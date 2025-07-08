@@ -6,8 +6,10 @@ Manages paths to external tools and provides platform-specific detection.
 """
 
 import os
+from utils.path_manager import get_path_manager, get_path, get_absolute_path, ensure_dir
 import platform
 import logging
+from utils.logging import setup_logging, log_startup, log_shutdown, log_error_with_context
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -19,7 +21,7 @@ class Config:
         self.logger = logging.getLogger(__name__)
         
         # Initialize tool paths
-        self.mgltools_path = self._find_mgltools()
+        self.mgltools_path = self.get_mgltools_path()
         self.vina_path = self._find_vina()
         self.gnina_path = self._find_gnina()
         self.diffdock_path = self._find_diffdock()
@@ -30,8 +32,8 @@ class Config:
         # Log detected tools
         self._log_tool_status()
     
-    def _find_mgltools(self) -> Optional[str]:
-        """Find MGLTools installation."""
+    def get_mgltools_path(self):
+        """Get MGLTools installation path."""
         # Check environment variable first
         mgltools_path = os.environ.get('MGLTOOLS_PATH')
         if mgltools_path and os.path.exists(mgltools_path):
@@ -39,49 +41,115 @@ class Config:
         
         # Platform-specific common locations
         system = platform.system().lower()
-        if system == 'darwin':  # macOS
-            common_paths = [
-                os.path.expanduser('~/mgltools_1.5.7_MacOS-X'),
-                '/opt/mgltools',
-                '/usr/local/mgltools',
-                '/Applications/mgltools'
+        if system == 'windows':
+            possible_paths = [
+                os.path.join(os.environ.get('PROGRAMFILES', 'C:\\Program Files'), 'MGLTools'),
+                os.path.join(os.environ.get('PROGRAMFILES(X86)', 'C:\\Program Files (x86)'), 'MGLTools'),
+                os.path.join(os.path.expanduser('~'), 'MGLTools'),
+                os.path.join(os.path.expanduser('~'), 'mgltools'),
             ]
-        elif system == 'linux':
-            common_paths = [
-                '/opt/mgltools',
+        else:  # Linux/macOS
+            possible_paths = [
                 '/usr/local/mgltools',
+                '/opt/mgltools',
                 os.path.expanduser('~/mgltools'),
-                '/usr/share/mgltools'
+                os.path.expanduser('~/MGLTools'),
             ]
-        elif system == 'windows':
-            common_paths = [
-                'C:\\Program Files\\MGLTools',
-                'C:\\mgltools',
-                os.path.expanduser('~\\mgltools')
-            ]
-        else:
-            common_paths = []
         
-        # Check each path for the pythonsh executable
-        for path in common_paths:
-            pythonsh_path = os.path.join(path, 'bin', 'pythonsh')
-            if os.path.exists(pythonsh_path):
+        for path in possible_paths:
+            if os.path.exists(path):
                 return path
         
         return None
     
     def _find_vina(self) -> Optional[str]:
         """Find Vina executable."""
+        # Check environment variable first
         vina_path = os.environ.get('VINA_PATH')
         if vina_path and os.path.exists(vina_path):
             return vina_path
+        
+        # Check if vina is in PATH
+        import shutil
+        if shutil.which('vina'):
+            return 'vina'
+        
+        # Platform-specific common locations
+        system = platform.system().lower()
+        if system == 'windows':
+            possible_paths = [
+                'vina.exe',  # In PATH
+                './vina.exe',  # Current directory
+                './vina.bat',  # Current directory
+                './vina',  # Current directory
+                'bin/vina.bat',  # Local bin directory
+                'bin/vina',  # Local bin directory
+            ]
+        elif system == 'darwin':  # macOS
+            possible_paths = [
+                '/usr/local/bin/vina',
+                '/opt/homebrew/bin/vina',
+                os.path.expanduser('~/vina'),
+                './vina',
+            ]
+        else:  # Linux
+            possible_paths = [
+                '/usr/local/bin/vina',
+                '/usr/bin/vina',
+                '/opt/conda/envs/docking/bin/vina',
+                os.path.expanduser('~/vina'),
+                './vina',
+            ]
+        
+        for path in possible_paths:
+            if shutil.which(path):
+                return path
+        
         return None
     
     def _find_gnina(self) -> Optional[str]:
         """Find GNINA executable."""
+        # Check environment variable first
         gnina_path = os.environ.get('GNINA_PATH')
         if gnina_path and os.path.exists(gnina_path):
             return gnina_path
+        
+        # Check if gnina is in PATH
+        import shutil
+        if shutil.which('gnina'):
+            return 'gnina'
+        
+        # Platform-specific common locations
+        system = platform.system().lower()
+        if system == 'windows':
+            possible_paths = [
+                'gnina.exe',  # In PATH
+                './gnina.exe',  # Current directory
+                './gnina.bat',  # Current directory
+                './gnina',  # Current directory
+                'bin/gnina.bat',  # Local bin directory
+                'bin/gnina',  # Local bin directory
+            ]
+        elif system == 'darwin':  # macOS
+            possible_paths = [
+                '/usr/local/bin/gnina',
+                '/opt/homebrew/bin/gnina',
+                os.path.expanduser('~/gnina'),
+                './gnina',
+            ]
+        else:  # Linux
+            possible_paths = [
+                '/usr/local/bin/gnina',
+                '/usr/bin/gnina',
+                '/opt/conda/envs/docking/bin/gnina',
+                os.path.expanduser('~/gnina'),
+                './gnina',
+            ]
+        
+        for path in possible_paths:
+            if shutil.which(path):
+                return path
+        
         return None
     
     def _find_diffdock(self) -> Optional[str]:

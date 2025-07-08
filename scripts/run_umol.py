@@ -6,6 +6,7 @@ Runs UMol docking for protein-ligand complexes.
 """
 
 import os
+from utils.path_manager import get_path_manager, get_path, get_absolute_path, ensure_dir
 import sys
 import subprocess
 import time

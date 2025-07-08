@@ -4,13 +4,25 @@ import os
 import sys
 import logging
 import subprocess
+import shutil
+import numpy as np
 from rdkit import Chem
 from rdkit.Chem import AllChem
-import numpy as np
-import shutil
 
 # Add current directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Setup logging first
+from utils.logging import setup_logging as setup_docking_logging
+from utils.path_manager import get_path_manager, get_path, get_absolute_path, ensure_dir
+
+# Create logs directory if it doesn't exist
+ensure_dir('logs')
+
+# Configure logging
+logger = setup_docking_logging(__name__)
+
+# Import config after logging is set up
 from config import config
 
 # Import resource management utilities
@@ -19,47 +31,28 @@ try:
     RESOURCE_MANAGEMENT_AVAILABLE = True
 except ImportError:
     RESOURCE_MANAGEMENT_AVAILABLE = False
-    logging.warning("Resource management utilities not available - using basic cleanup")
+    logger.warning("Resource management utilities not available - using basic cleanup")
 
 try:
     # Try to import meeko with proper error handling
     try:
         from meeko import MoleculePreparation
         MEEKO_AVAILABLE = True
-        logging.info("Meeko successfully imported")
+        logger.info("Meeko successfully imported")
     except ImportError as e:
         if "rdkit.six" in str(e):
-            logging.warning("Meeko import failed due to rdkit.six module issue. This is a known compatibility problem.")
-            logging.warning("Falling back to RDKit-based ligand preparation.")
+            logger.warning("Meeko import failed due to rdkit.six module issue. This is a known compatibility problem.")
+            logger.warning("Falling back to RDKit-based ligand preparation.")
             MEEKO_AVAILABLE = False
         else:
-            logging.warning(f"Meeko import failed: {e}")
+            logger.warning(f"Meeko import failed: {e}")
             MEEKO_AVAILABLE = False
     except Exception as e:
-        logging.warning(f"Unexpected error importing Meeko: {e}")
+        logger.warning(f"Unexpected error importing Meeko: {e}")
         MEEKO_AVAILABLE = False
 except Exception as e:
-    logging.warning(f"Failed to check Meeko availability: {e}")
+    logger.warning(f"Failed to check Meeko availability: {e}")
     MEEKO_AVAILABLE = False
-
-# Setup logging
-def setup_logging():
-    """Setup logging to both console and file"""
-    # Create logs directory if it doesn't exist
-    os.makedirs('logs', exist_ok=True)
-    
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(message)s',
-        handlers=[
-            logging.FileHandler('preprocessing_log.txt'),
-            logging.StreamHandler(sys.stdout)
-        ]
-    )
-
-# Call setup_logging at module level
-setup_logging()
 
 SUPPORTED_PROTEIN_EXT = {'.pdb', '.pdbqt'}
 SUPPORTED_LIGAND_EXT = {'.smi', '.sdf', '.mol2'}
@@ -67,14 +60,14 @@ SUPPORTED_LIGAND_EXT = {'.smi', '.sdf', '.mol2'}
 
 def validate_file(file_path, valid_exts, file_type):
     if not os.path.isfile(file_path):
-        logging.error(f"{file_type} file '{file_path}' does not exist.")
+        logger.error(f"{file_type} file '{file_path}' does not exist.")
         sys.exit(1)
     if not os.access(file_path, os.R_OK):
-        logging.error(f"{file_type} file '{file_path}' is not readable.")
+        logger.error(f"{file_type} file '{file_path}' is not readable.")
         sys.exit(1)
     ext = os.path.splitext(file_path)[1].lower()
     if ext not in valid_exts:
-        logging.error(f"{file_type} file '{file_path}' must have one of the following extensions: {', '.join(valid_exts)}.")
+        logger.error(f"{file_type} file '{file_path}' must have one of the following extensions: {', '.join(valid_exts)}.")
         sys.exit(1)
     return file_path
 
@@ -82,7 +75,7 @@ def validate_file(file_path, valid_exts, file_type):
 def validate_output_dir(output_file):
     output_dir = os.path.dirname(os.path.abspath(output_file)) or '.'
     if not os.access(output_dir, os.W_OK):
-        logging.error(f"Output directory '{output_dir}' is not writable.")
+        logger.error(f"Output directory '{output_dir}' is not writable.")
         sys.exit(1)
 
 
@@ -99,7 +92,7 @@ def clean_pdbqt_formatting(pdbqt_file):
             _clean_pdbqt_content(pdbqt_file, temp_file_path)
             # Move cleaned file to original location
             shutil.move(temp_file_path, pdbqt_file)
-            logging.info(f"Cleaned PDBQT formatting in {pdbqt_file}")
+            logger.info(f"Cleaned PDBQT formatting in {pdbqt_file}")
     else:
         # Fallback to original implementation
         _clean_pdbqt_formatting_fallback(pdbqt_file)
@@ -158,7 +151,7 @@ def _clean_pdbqt_content(input_file: str, output_file: str):
                     outfile.write(new_line)
                     
                 except (ValueError, IndexError) as e:
-                    logging.warning(f"Skipping malformed line {line_num}: {line.strip()}")
+                    logger.warning(f"Skipping malformed line {line_num}: {line.strip()}")
                     continue
             else:
                 # Keep non-ATOM/HETATM lines as-is
@@ -178,10 +171,10 @@ def _clean_pdbqt_formatting_fallback(pdbqt_file):
         
         # Replace original file with cleaned version
         shutil.move(temp_file.name, pdbqt_file)
-        logging.info(f"Cleaned PDBQT formatting in {pdbqt_file}")
+        logger.info(f"Cleaned PDBQT formatting in {pdbqt_file}")
         
     except Exception as e:
-        logging.error(f"Error cleaning PDBQT file: {e}")
+        logger.error(f"Error cleaning PDBQT file: {e}")
         if os.path.exists(temp_file.name):
             os.unlink(temp_file.name)
         raise
@@ -193,7 +186,7 @@ def _simple_pdb_to_pdbqt(pdb_file, pdbqt_file):
         # Load the PDB file as an RDKit molecule
         mol = Chem.MolFromPDBFile(pdb_file, removeHs=False)
         if mol is None:
-            logging.error(f"RDKit failed to load protein from {pdb_file}")
+            logger.error(f"RDKit failed to load protein from {pdb_file}")
             raise ValueError("Invalid PDB file for fallback conversion")
         
         # Add hydrogens if not present
@@ -239,9 +232,9 @@ def _simple_pdb_to_pdbqt(pdb_file, pdbqt_file):
         # Write out the PDBQT file
         with open(pdbqt_file, 'w') as f:
             f.writelines(pdbqt_lines)
-        logging.info(f"Improved PDB to PDBQT conversion completed: {pdbqt_file}")
+        logger.info(f"Improved PDB to PDBQT conversion completed: {pdbqt_file}")
     except Exception as e:
-        logging.error(f"Improved PDB to PDBQT conversion failed: {e}")
+        logger.error(f"Improved PDB to PDBQT conversion failed: {e}")
         raise
 
 
@@ -251,7 +244,7 @@ def prepare_protein(protein_file):
     validate_output_dir(output_file)
     if ext == '.pdb':
         try:
-            logging.info(f"Preparing protein: cleaning, adding hydrogens, assigning Gasteiger charges, converting to PDBQT...")
+            logger.info(f"Preparing protein: cleaning, adding hydrogens, assigning Gasteiger charges, converting to PDBQT...")
             mgltools_pythonsh = config.get_mgltools_pythonsh()
             prepare_script = config.get_mgltools_prepare_script()
             
@@ -264,16 +257,16 @@ def prepare_protein(protein_file):
                     '-A', 'hydrogens',  # Add hydrogens
                     '-U', 'waters',     # Remove waters
                 ]
-                logging.info(f"Running MGLTools: {' '.join(cmd)}")
+                logger.info(f"Running MGLTools: {' '.join(cmd)}")
                 result = subprocess.run(cmd, capture_output=True, text=True)
                 if result.returncode != 0:
-                    logging.error(f"MGLTools failed: {result.stderr}\n{result.stdout}")
+                    logger.error(f"MGLTools failed: {result.stderr}\n{result.stdout}")
                     if 'IndexError' in result.stderr or 'Unable to assign HAD type' in result.stderr:
-                        logging.error("Protein structure appears to be missing atoms or is corrupted. Please repair the PDB using PDBFixer (https://pdbfixer.openmm.org/) and try again.")
+                        logger.error("Protein structure appears to be missing atoms or is corrupted. Please repair the PDB using PDBFixer (https://pdbfixer.openmm.org/) and try again.")
                     sys.exit(1)
             else:
                 # Fallback for Docker/Linux environments - use meeko for basic conversion
-                logging.info("MGLTools not found. Using meeko for basic protein preparation...")
+                logger.info("MGLTools not found. Using meeko for basic protein preparation...")
                 try:
                     from Bio import PDB
                     from rdkit import Chem
@@ -282,7 +275,7 @@ def prepare_protein(protein_file):
                     # Load PDB file and convert to PDBQT
                     mol = Chem.MolFromPDBFile(protein_file, removeHs=False)
                     if mol is None:
-                        logging.error(f"Failed to load protein from {protein_file}")
+                        logger.error(f"Failed to load protein from {protein_file}")
                         sys.exit(1)
                     
                     # Add hydrogens if not present
@@ -295,43 +288,43 @@ def prepare_protein(protein_file):
                     with open(output_file, 'w') as f:
                         f.write(pdbqt_string)
                     
-                    logging.info(f"Protein prepared using meeko fallback method")
+                    logger.info(f"Protein prepared using meeko fallback method")
                     
                 except ImportError as e:
-                    logging.error(f"Required packages not available for protein preparation: {e}")
-                    logging.error("Please install MGLTools or ensure BioPython and meeko are available")
+                    logger.error(f"Required packages not available for protein preparation: {e}")
+                    logger.error("Please install MGLTools or ensure BioPython and meeko are available")
                     sys.exit(1)
                 except Exception as e:
-                    logging.error(f"Meeko protein preparation failed: {e}")
+                    logger.error(f"Meeko protein preparation failed: {e}")
                     # Try simple PDB to PDBQT conversion as last resort
-                    logging.info("Attempting basic PDB to PDBQT conversion...")
+                    logger.info("Attempting basic PDB to PDBQT conversion...")
                     try:
                         _simple_pdb_to_pdbqt(protein_file, output_file)
                     except Exception as e2:
-                        logging.error(f"All protein preparation methods failed: {e2}")
+                        logger.error(f"All protein preparation methods failed: {e2}")
                         sys.exit(1)
             
             # Clean up PDBQT formatting issues
-            logging.info("Cleaning PDBQT formatting...")
+            logger.info("Cleaning PDBQT formatting...")
             clean_pdbqt_formatting(output_file)
             
-            logging.info(f"Protein cleaned (waters removed), hydrogens added, Gasteiger charges assigned, and saved as: {output_file}")
+            logger.info(f"Protein cleaned (waters removed), hydrogens added, Gasteiger charges assigned, and saved as: {output_file}")
             return output_file
         except Exception as e:
-            logging.error(f"Error during protein preparation: {e}")
+            logger.error(f"Error during protein preparation: {e}")
             sys.exit(1)
     elif ext == '.pdbqt':
         try:
             if os.path.getsize(protein_file) == 0:
-                logging.error(f"PDBQT file '{protein_file}' is empty.")
+                logger.error(f"PDBQT file '{protein_file}' is empty.")
                 sys.exit(1)
-            logging.info(f"PDBQT file '{protein_file}' is valid.")
+            logger.info(f"PDBQT file '{protein_file}' is valid.")
             return protein_file
         except Exception as e:
-            logging.error(f"Error validating PDBQT file: {e}")
+            logger.error(f"Error validating PDBQT file: {e}")
             sys.exit(1)
     else:
-        logging.error(f"Unsupported protein file format: {ext}")
+        logger.error(f"Unsupported protein file format: {ext}")
         sys.exit(1)
 
 
@@ -347,11 +340,11 @@ def batch_prepare_ligands(ligand_files, output_dir='.'):
         List of prepared ligand file paths
     """
     prepared_ligands = []
-    os.makedirs(output_dir, exist_ok=True)
+    ensure_dir(output_dir)
     
     for i, ligand_file in enumerate(ligand_files):
         try:
-            logging.info(f"Processing ligand {i+1}/{len(ligand_files)}: {ligand_file}")
+            logger.info(f"Processing ligand {i+1}/{len(ligand_files)}: {ligand_file}")
             
             # Generate unique output filename
             base_name = os.path.splitext(os.path.basename(ligand_file))[0]
@@ -362,10 +355,10 @@ def batch_prepare_ligands(ligand_files, output_dir='.'):
             prepared_ligands.append(prepared_ligand)
             
         except Exception as e:
-            logging.error(f"Failed to prepare ligand {ligand_file}: {e}")
+            logger.error(f"Failed to prepare ligand {ligand_file}: {e}")
             continue
     
-    logging.info(f"Successfully prepared {len(prepared_ligands)} out of {len(ligand_files)} ligands")
+    logger.info(f"Successfully prepared {len(prepared_ligands)} out of {len(ligand_files)} ligands")
     return prepared_ligands
 
 
@@ -381,19 +374,19 @@ def prepare_ligand_single(ligand_file, output_file):
     
     try:
         if ext == '.smi':
-            logging.info(f"Ligand input detected as SMILES. Converting to RDKit molecule.")
+            logger.info(f"Ligand input detected as SMILES. Converting to RDKit molecule.")
             with open(ligand_file) as f:
                 smiles = f.readline().strip().split()[0]
             mol = Chem.MolFromSmiles(smiles)
             if mol is None:
-                logging.error(f"Failed to parse SMILES from {ligand_file}")
+                logger.error(f"Failed to parse SMILES from {ligand_file}")
                 raise ValueError("Invalid SMILES")
             mol = Chem.AddHs(mol)
-            logging.info("Generating 3D conformer...")
+            logger.info("Generating 3D conformer...")
             conformer_success = (AllChem.EmbedMolecule(mol, AllChem.ETKDG()) == 0)
             if not conformer_success:
                 # Try generating tautomers as fallback
-                logging.warning("3D conformer generation failed. Attempting to generate tautomers and retry...")
+                logger.warning("3D conformer generation failed. Attempting to generate tautomers and retry...")
                 try:
                     from rdkit.Chem import rdMolStandardize
                     enumerator = rdMolStandardize.TautomerEnumerator()
@@ -403,57 +396,57 @@ def prepare_ligand_single(ligand_file, output_file):
                         if AllChem.EmbedMolecule(t, AllChem.ETKDG()) == 0:
                             mol = t
                             conformer_success = True
-                            logging.info("Successfully generated conformer for a tautomer.")
+                            logger.info("Successfully generated conformer for a tautomer.")
                             break
                 except Exception as e:
-                    logging.warning(f"Tautomer generation failed: {e}")
+                    logger.warning(f"Tautomer generation failed: {e}")
             if not conformer_success:
-                logging.error("3D conformer generation failed for all tautomers.")
+                logger.error("3D conformer generation failed for all tautomers.")
                 raise ValueError("Failed conformer generation")
-            logging.info("Performing energy minimization...")
+            logger.info("Performing energy minimization...")
             if AllChem.UFFOptimizeMolecule(mol) != 0:
-                logging.warning("Energy minimization may not have fully converged.")
+                logger.warning("Energy minimization may not have fully converged.")
             convert_ligand_to_pdbqt(mol, output_file)
             return output_file
         elif ext == '.sdf':
-            logging.info(f"Ligand input detected as SDF. Loading molecule(s).")
+            logger.info(f"Ligand input detected as SDF. Loading molecule(s).")
             suppl = Chem.SDMolSupplier(ligand_file, removeHs=False)
             mols = [m for m in suppl if m is not None]
             if not mols:
-                logging.error(f"No valid molecules found in {ligand_file}")
+                logger.error(f"No valid molecules found in {ligand_file}")
                 raise ValueError("No valid molecules")
             mol = mols[0]
             if mol.GetNumConformers() == 0:
-                logging.info("Generating 3D conformer for SDF molecule...")
+                logger.info("Generating 3D conformer for SDF molecule...")
                 if AllChem.EmbedMolecule(mol, AllChem.ETKDG()) != 0:
-                    logging.error("3D conformer generation failed for SDF molecule.")
+                    logger.error("3D conformer generation failed for SDF molecule.")
                     raise ValueError("Failed conformer generation")
-            logging.info("Performing energy minimization for SDF molecule...")
+            logger.info("Performing energy minimization for SDF molecule...")
             if AllChem.UFFOptimizeMolecule(mol) != 0:
-                logging.warning("Energy minimization may not have fully converged for SDF molecule.")
+                logger.warning("Energy minimization may not have fully converged for SDF molecule.")
             convert_ligand_to_pdbqt(mol, output_file)
             return output_file
         elif ext == '.mol2':
-            logging.info(f"Ligand input detected as MOL2. Loading molecule.")
+            logger.info(f"Ligand input detected as MOL2. Loading molecule.")
             mol = Chem.MolFromMol2File(ligand_file, removeHs=False)
             if mol is None:
-                logging.error(f"Failed to load molecule from {ligand_file}")
+                logger.error(f"Failed to load molecule from {ligand_file}")
                 raise ValueError("Failed to load MOL2")
             if mol.GetNumConformers() == 0:
-                logging.info("Generating 3D conformer for MOL2 molecule...")
+                logger.info("Generating 3D conformer for MOL2 molecule...")
                 if AllChem.EmbedMolecule(mol, AllChem.ETKDG()) != 0:
-                    logging.error("3D conformer generation failed for MOL2 molecule.")
+                    logger.error("3D conformer generation failed for MOL2 molecule.")
                     raise ValueError("Failed conformer generation")
-            logging.info("Performing energy minimization for MOL2 molecule...")
+            logger.info("Performing energy minimization for MOL2 molecule...")
             if AllChem.UFFOptimizeMolecule(mol) != 0:
-                logging.warning("Energy minimization may not have fully converged for MOL2 molecule.")
+                logger.warning("Energy minimization may not have fully converged for MOL2 molecule.")
             convert_ligand_to_pdbqt(mol, output_file)
             return output_file
         else:
-            logging.error(f"Unsupported ligand file format: {ext}")
+            logger.error(f"Unsupported ligand file format: {ext}")
             raise ValueError("Unsupported format")
     except Exception as e:
-        logging.error(f"Error during ligand preparation: {e}")
+        logger.error(f"Error during ligand preparation: {e}")
         # For single ligand mode, exit; for batch mode, continue
         if output_file == 'ligand_prepped.pdbqt':
             sys.exit(1)
@@ -462,19 +455,77 @@ def prepare_ligand_single(ligand_file, output_file):
 
 
 def convert_ligand_to_pdbqt(mol, pdbqt_file):
-    if not MEEKO_AVAILABLE:
-        logging.error("Meeko is not installed. Cannot convert ligand to PDBQT format.")
-        sys.exit(1)
+    if MEEKO_AVAILABLE:
+        try:
+            # Updated Meeko API - use the new interface only
+            prep = MoleculePreparation()
+            pdbqt_str = prep.write_string(mol)
+            with open(pdbqt_file, 'w') as f:
+                f.write(pdbqt_str)
+            logger.info(f"Ligand converted and saved as: {pdbqt_file}")
+            return
+        except Exception as e:
+            logger.warning(f"Failed to convert ligand to PDBQT using Meeko: {e}")
+            logger.info("Falling back to RDKit-based conversion...")
+    
+    # Fallback: Use RDKit-based conversion
     try:
-        # Updated Meeko API - use the new interface only
-        prep = MoleculePreparation()
-        pdbqt_str = prep.write_string(mol)
-        with open(pdbqt_file, 'w') as f:
-            f.write(pdbqt_str)
-        logging.info(f"Ligand converted and saved as: {pdbqt_file}")
+        # Add hydrogens if not present
+        mol = Chem.AddHs(mol)
+        
+        # Generate 3D conformer if not present
+        if mol.GetNumConformers() == 0:
+            AllChem.EmbedMolecule(mol, AllChem.ETKDG())
+        
+        # Optimize geometry
+        AllChem.UFFOptimizeMolecule(mol)
+        
+        # Write as PDB first, then convert to PDBQT format
+        temp_pdb = pdbqt_file.replace('.pdbqt', '_temp.pdb')
+        Chem.MolToPDBFile(mol, temp_pdb)
+        
+        # Simple PDB to PDBQT conversion
+        with open(temp_pdb, 'r') as f_in, open(pdbqt_file, 'w') as f_out:
+            for line in f_in:
+                if line.startswith(('ATOM', 'HETATM')):
+                    # Basic PDBQT formatting
+                    atom_name = line[12:16].strip()
+                    element = line[76:78].strip()
+                    
+                    # Determine AutoDock atom type
+                    if element == 'C':
+                        autodock_type = 'C'
+                    elif element == 'N':
+                        autodock_type = 'N'
+                    elif element == 'O':
+                        autodock_type = 'O'
+                    elif element == 'S':
+                        autodock_type = 'S'
+                    elif element == 'P':
+                        autodock_type = 'P'
+                    elif element == 'H':
+                        autodock_type = 'H'
+                    else:
+                        autodock_type = 'C'
+                    
+                    # Format as PDBQT
+                    pdb_part = line[:76].rstrip()
+                    charge = 0.000
+                    pdbqt_line = f"{pdb_part}  {charge:>6.3f} {autodock_type}\n"
+                    f_out.write(pdbqt_line)
+                else:
+                    # Keep non-ATOM lines
+                    f_out.write(line)
+        
+        # Clean up temp file
+        if os.path.exists(temp_pdb):
+            os.remove(temp_pdb)
+        
+        logger.info(f"Ligand converted using RDKit fallback and saved as: {pdbqt_file}")
+        
     except Exception as e:
-        logging.error(f"Failed to convert ligand to PDBQT using Meeko's new API: {e}")
-        sys.exit(1)
+        logger.error(f"Failed to convert ligand to PDBQT using RDKit fallback: {e}")
+        raise
 
 
 def main():
@@ -501,32 +552,32 @@ def main():
     )
     args = parser.parse_args()
 
-    logging.info("Starting structure preparation...")
+    logger.info("Starting structure preparation...")
 
     # Validate input files
     protein_file = validate_file(args.protein, SUPPORTED_PROTEIN_EXT, "Protein")
     
     # Protein preparation
     prepared_protein = prepare_protein(protein_file)
-    logging.info(f"Prepared protein file: {prepared_protein}")
+    logger.info(f"Prepared protein file: {prepared_protein}")
 
     # Ligand preparation - support both single and batch mode
     if args.batch_ligands:
         # Batch mode - prepare multiple ligands
-        logging.info(f"Batch mode: preparing {len(args.batch_ligands)} ligands")
+        logger.info(f"Batch mode: preparing {len(args.batch_ligands)} ligands")
         for ligand_file in args.batch_ligands:
             validate_file(ligand_file, SUPPORTED_LIGAND_EXT, "Ligand")
         
         prepared_ligands = batch_prepare_ligands(args.batch_ligands, args.output_dir)
-        logging.info(f"Batch preparation complete: {len(prepared_ligands)} ligands prepared")
+        logger.info(f"Batch preparation complete: {len(prepared_ligands)} ligands prepared")
         
     else:
         # Single ligand mode
         ligand_file = validate_file(args.ligand, SUPPORTED_LIGAND_EXT, "Ligand")
         prepared_ligand = prepare_ligand(ligand_file)
-        logging.info(f"Ligand prepared: {prepared_ligand}")
+        logger.info(f"Ligand prepared: {prepared_ligand}")
 
-    logging.info("Structure preparation completed successfully")
+    logger.info("Structure preparation completed successfully")
 
 
 if __name__ == "__main__":

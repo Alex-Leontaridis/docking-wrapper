@@ -8,6 +8,7 @@ Provides clear installation instructions for missing dependencies.
 
 import sys
 import os
+from utils.path_manager import get_path_manager, get_path, get_absolute_path, ensure_dir
 import subprocess
 import importlib
 import platform
@@ -64,46 +65,42 @@ def check_external_tool(tool_name: str, display_name: str) -> Tuple[bool, str]:
     except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError):
         return False, f"✗ {display_name} (not found in PATH)"
 
-def check_mgltools() -> Tuple[bool, str]:
-    """Check if MGLTools is available using environment variables and platform detection."""
+def check_mgltools():
+    """Check if MGLTools is installed and accessible."""
+    print("Checking MGLTools...")
+    
     # Check environment variable first
     mgltools_path = os.environ.get('MGLTOOLS_PATH')
     if mgltools_path and os.path.exists(mgltools_path):
-        pythonsh_path = os.path.join(mgltools_path, 'bin', 'pythonsh')
-        if os.path.exists(pythonsh_path):
-            return True, f"✓ MGLTools (found at {mgltools_path})"
+        print(f"✓ MGLTools found via environment variable: {mgltools_path}")
+        return True
     
     # Platform-specific common locations
     system = platform.system().lower()
-    home = os.path.expanduser("~")
-    
     if system == 'windows':
-        common_paths = [
-            'C:\\Program Files\\MGLTools',
-            'C:\\mgltools',
-            os.path.join(home, 'mgltools'),
+        possible_paths = [
+            os.path.join(os.environ.get('PROGRAMFILES', 'C:\\Program Files'), 'MGLTools'),
+            os.path.join(os.environ.get('PROGRAMFILES(X86)', 'C:\\Program Files (x86)'), 'MGLTools'),
+            os.path.join(os.path.expanduser('~'), 'MGLTools'),
+            os.path.join(os.path.expanduser('~'), 'mgltools'),
         ]
-    elif system == 'darwin':  # macOS
-        common_paths = [
-            os.path.join(home, 'mgltools_1.5.7_MacOS-X'),
-            '/opt/mgltools',
+    else:  # Linux/macOS
+        possible_paths = [
             '/usr/local/mgltools',
-            '/Applications/mgltools',
-        ]
-    else:  # Linux
-        common_paths = [
             '/opt/mgltools',
-            '/usr/local/mgltools',
-            os.path.join(home, 'mgltools'),
-            '/usr/share/mgltools',
+            os.path.expanduser('~/mgltools'),
+            os.path.expanduser('~/MGLTools'),
         ]
     
-    for path in common_paths:
-        pythonsh_path = os.path.join(path, 'bin', 'pythonsh')
-        if os.path.exists(pythonsh_path):
-            return True, f"✓ MGLTools (found at {path})"
+    for path in possible_paths:
+        if os.path.exists(path):
+            print(f"✓ MGLTools found at: {path}")
+            return True
     
-    return False, "✗ MGLTools (not found - optional for protein preparation)"
+    print("✗ MGLTools not found")
+    print("  Install from: http://mgltools.scripps.edu/downloads/downloads/tools/downloads")
+    print("  Or set MGLTOOLS_PATH environment variable")
+    return False
 
 def main():
     """Main dependency checking function."""
@@ -149,8 +146,7 @@ def main():
     # Check MGLTools
     print("\nMGLTools:")
     print("-" * 40)
-    mgltools_available, mgltools_message = check_mgltools()
-    print(f"  {mgltools_message}")
+    mgltools_available = check_mgltools()
     
     # Summary
     print("\n" + "=" * 60)

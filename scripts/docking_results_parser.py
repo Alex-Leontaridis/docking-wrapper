@@ -7,8 +7,10 @@ and generates summary DataFrames with pose information and scores.
 """
 
 import os
+from utils.path_manager import get_path_manager, get_path, get_absolute_path, ensure_dir
 import re
 import logging
+from utils.logging import setup_logging, log_startup, log_shutdown, log_error_with_context
 import pandas as pd
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple

@@ -18,6 +18,7 @@ Outputs:
 
 import argparse
 import os
+from utils.path_manager import get_path_manager, get_path, get_absolute_path, ensure_dir
 import sys
 import json
 import numpy as np
@@ -127,7 +128,7 @@ def main():
     affinity_json_path = args.affinity_json
     if not os.path.exists(affinity_json_path):
         # Try fallback
-        fallback_path = 'outputs/test_boltz2_result.json'
+        fallback_path = get_path("outputs/test_boltz2_result.json")
         if os.path.exists(fallback_path):
             print(f"[INFO] Affinity file not found, using fallback: {fallback_path}")
             affinity_json_path = fallback_path
@@ -171,7 +172,7 @@ def main():
         },
         "notes": "Confidence score is a weighted composite of consensus, druggability, ligand efficiency, model voting, and interaction count."
     }
-    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    ensure_dir(os.path.dirname(args.output))
     with open(args.output, 'w') as f:
         json.dump(result, f, indent=2)
     print(f"[SUCCESS] Confidence scoring complete: {args.output}")

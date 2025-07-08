@@ -705,3 +705,263 @@
 2025-07-05 02:06:46,890 | INFO     | BatchPipeline        | Basic PDB to PDBQT conversion completed: outputs\prepared_structures\protein_prepared.pdbqt
 2025-07-05 02:06:46,891 | INFO     | BatchPipeline        | Protein prepared: outputs\prepared_structures\protein_prepared.pdbqt
 2025-07-05 02:06:51,938 | WARNING  | BatchPipeline        | No successful results to aggregate
+2025-07-08 16:12:06,075 | INFO     | BatchPipeline        | Resource cleanup completed
+2025-07-08 16:15:19,344 | INFO     | BatchPipeline        | Resource cleanup completed
+2025-07-08 16:18:36,221 | INFO     | BatchPipeline        | Discovered 4 ligand(s) to process
+2025-07-08 16:18:36,222 | INFO     | BatchPipeline        | Preparing protein structure: inputs/protein.pdb
+2025-07-08 16:18:36,223 | INFO     | BatchPipeline        | Preparing protein: cleaning, adding hydrogens, assigning Gasteiger charges, converting to PDBQT...
+2025-07-08 16:18:36,223 | INFO     | BatchPipeline        | MGLTools not found. Using simple PDB to PDBQT conversion...
+2025-07-08 16:18:36,232 | INFO     | BatchPipeline        | Basic PDB to PDBQT conversion completed: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:18:36,232 | INFO     | BatchPipeline        | Basic PDB to PDBQT conversion completed: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:18:36,232 | INFO     | BatchPipeline        | Protein prepared: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:18:37,915 | ERROR    | BatchPipeline        | Failed to get result for ligand ligand1: cannot pickle '_thread.lock' object
+2025-07-08 16:18:37,915 | ERROR    | BatchPipeline        | Failed to get result for ligand ligand2: cannot pickle '_thread.lock' object
+2025-07-08 16:18:37,916 | ERROR    | BatchPipeline        | Failed to get result for ligand aspirin: cannot pickle '_thread.lock' object
+2025-07-08 16:18:37,916 | ERROR    | BatchPipeline        | Failed to get result for ligand aspirin_valid: cannot pickle '_thread.lock' object
+2025-07-08 16:18:37,922 | WARNING  | BatchPipeline        | No successful results to aggregate
+2025-07-08 16:18:38,098 | INFO     | BatchPipeline        | Resource cleanup completed
+2025-07-08 16:18:38,099 | INFO     | BatchPipeline        | Resource cleanup completed
+2025-07-08 16:18:48,747 | INFO     | BatchPipeline        | Discovered 4 ligand(s) to process
+2025-07-08 16:18:48,748 | INFO     | BatchPipeline        | Preparing protein structure: inputs/protein.pdb
+2025-07-08 16:18:48,748 | INFO     | BatchPipeline        | Preparing protein: cleaning, adding hydrogens, assigning Gasteiger charges, converting to PDBQT...
+2025-07-08 16:18:48,748 | INFO     | BatchPipeline        | MGLTools not found. Using simple PDB to PDBQT conversion...
+2025-07-08 16:18:48,753 | INFO     | BatchPipeline        | Basic PDB to PDBQT conversion completed: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:18:48,753 | INFO     | BatchPipeline        | Basic PDB to PDBQT conversion completed: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:18:48,754 | INFO     | BatchPipeline        | Protein prepared: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:18:48,754 | INFO     | BatchPipeline        | Processing ligand: ligand1
+2025-07-08 16:18:48,755 | INFO     | BatchPipeline        | [ligand1] Stage 1: Preparing ligand structure
+2025-07-08 16:18:48,779 | INFO     | BatchPipeline        | Resource cleanup completed
+2025-07-08 16:18:48,779 | INFO     | BatchPipeline        | Resource cleanup completed
+2025-07-08 16:19:19,315 | INFO     | BatchPipeline        | Discovered 4 ligand(s) to process
+2025-07-08 16:19:19,316 | INFO     | BatchPipeline        | Preparing protein structure: inputs/protein.pdb
+2025-07-08 16:19:19,316 | INFO     | BatchPipeline        | Preparing protein: cleaning, adding hydrogens, assigning Gasteiger charges, converting to PDBQT...
+2025-07-08 16:19:19,316 | INFO     | BatchPipeline        | MGLTools not found. Using simple PDB to PDBQT conversion...
+2025-07-08 16:19:19,321 | INFO     | BatchPipeline        | Basic PDB to PDBQT conversion completed: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:19:19,322 | INFO     | BatchPipeline        | Basic PDB to PDBQT conversion completed: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:19:19,322 | INFO     | BatchPipeline        | Protein prepared: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:19:19,322 | INFO     | BatchPipeline        | Processing ligand: ligand1
+2025-07-08 16:19:19,323 | INFO     | BatchPipeline        | [ligand1] Stage 1: Preparing ligand structure
+2025-07-08 16:19:19,347 | INFO     | BatchPipeline        | [ligand1] Ligand prepared successfully
+2025-07-08 16:19:19,348 | INFO     | BatchPipeline        | [ligand1] Stage 2: Running traditional docking with engines: ['vina']
+2025-07-08 16:19:20,158 | INFO     | BatchPipeline        | [ligand1] Auto-detected box parameters: (np.float64(15.450639953878074), np.float64(26.054982415679383), np.float64(4.076263764774435), np.float64(54.0), np.float64(70.0), np.float64(72.0))
+2025-07-08 16:19:20,158 | INFO     | BatchPipeline        | [ligand1] Running VINA docking
+2025-07-08 16:19:20,163 | ERROR    | BatchPipeline        | [ligand1] VINA failed: sequence item 0: expected str instance, NoneType found
+2025-07-08 16:19:20,163 | ERROR    | BatchPipeline        | [ligand1] Docking failed due to engine failures: vina: sequence item 0: expected str instance, NoneType found
+2025-07-08 16:19:20,163 | INFO     | BatchPipeline        | Processing ligand: ligand2
+2025-07-08 16:19:20,164 | INFO     | BatchPipeline        | [ligand2] Stage 1: Preparing ligand structure
+2025-07-08 16:19:20,176 | INFO     | BatchPipeline        | [ligand2] Ligand prepared successfully
+2025-07-08 16:19:20,178 | INFO     | BatchPipeline        | [ligand2] Stage 2: Running traditional docking with engines: ['vina']
+2025-07-08 16:19:20,969 | INFO     | BatchPipeline        | [ligand2] Auto-detected box parameters: (np.float64(15.450639953878074), np.float64(26.054982415679383), np.float64(4.076263764774435), np.float64(54.0), np.float64(70.0), np.float64(72.0))
+2025-07-08 16:19:20,969 | INFO     | BatchPipeline        | [ligand2] Running VINA docking
+2025-07-08 16:19:20,970 | ERROR    | BatchPipeline        | [ligand2] VINA failed: sequence item 0: expected str instance, NoneType found
+2025-07-08 16:19:20,970 | ERROR    | BatchPipeline        | [ligand2] Docking failed due to engine failures: vina: sequence item 0: expected str instance, NoneType found
+2025-07-08 16:19:20,970 | INFO     | BatchPipeline        | Processing ligand: aspirin
+2025-07-08 16:19:20,971 | INFO     | BatchPipeline        | [aspirin] Stage 1: Preparing ligand structure
+2025-07-08 16:19:20,979 | INFO     | BatchPipeline        | [aspirin] Ligand prepared successfully
+2025-07-08 16:19:20,981 | INFO     | BatchPipeline        | [aspirin] Stage 2: Running traditional docking with engines: ['vina']
+2025-07-08 16:19:21,776 | INFO     | BatchPipeline        | [aspirin] Auto-detected box parameters: (np.float64(15.450639953878074), np.float64(26.054982415679383), np.float64(4.076263764774435), np.float64(54.0), np.float64(70.0), np.float64(72.0))
+2025-07-08 16:19:21,776 | INFO     | BatchPipeline        | [aspirin] Running VINA docking
+2025-07-08 16:19:21,777 | ERROR    | BatchPipeline        | [aspirin] VINA failed: sequence item 0: expected str instance, NoneType found
+2025-07-08 16:19:21,777 | ERROR    | BatchPipeline        | [aspirin] Docking failed due to engine failures: vina: sequence item 0: expected str instance, NoneType found
+2025-07-08 16:19:21,778 | INFO     | BatchPipeline        | Processing ligand: aspirin_valid
+2025-07-08 16:19:21,778 | INFO     | BatchPipeline        | [aspirin_valid] Stage 1: Preparing ligand structure
+2025-07-08 16:19:21,785 | INFO     | BatchPipeline        | [aspirin_valid] Ligand prepared successfully
+2025-07-08 16:19:21,785 | INFO     | BatchPipeline        | [aspirin_valid] Stage 2: Running traditional docking with engines: ['vina']
+2025-07-08 16:19:22,593 | INFO     | BatchPipeline        | [aspirin_valid] Auto-detected box parameters: (np.float64(15.450639953878074), np.float64(26.054982415679383), np.float64(4.076263764774435), np.float64(54.0), np.float64(70.0), np.float64(72.0))
+2025-07-08 16:19:22,594 | INFO     | BatchPipeline        | [aspirin_valid] Running VINA docking
+2025-07-08 16:19:22,595 | ERROR    | BatchPipeline        | [aspirin_valid] VINA failed: sequence item 0: expected str instance, NoneType found
+2025-07-08 16:19:22,595 | ERROR    | BatchPipeline        | [aspirin_valid] Docking failed due to engine failures: vina: sequence item 0: expected str instance, NoneType found
+2025-07-08 16:19:22,597 | WARNING  | BatchPipeline        | No successful results to aggregate
+2025-07-08 16:19:22,597 | INFO     | BatchPipeline        | Resource cleanup completed
+2025-07-08 16:19:22,598 | INFO     | BatchPipeline        | Resource cleanup completed
+2025-07-08 16:19:53,403 | INFO     | BatchPipeline        | Discovered 4 ligand(s) to process
+2025-07-08 16:19:53,403 | INFO     | BatchPipeline        | Preparing protein structure: inputs/protein.pdb
+2025-07-08 16:19:53,404 | INFO     | BatchPipeline        | Preparing protein: cleaning, adding hydrogens, assigning Gasteiger charges, converting to PDBQT...
+2025-07-08 16:19:53,404 | INFO     | BatchPipeline        | MGLTools not found. Using simple PDB to PDBQT conversion...
+2025-07-08 16:19:53,409 | INFO     | BatchPipeline        | Basic PDB to PDBQT conversion completed: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:19:53,409 | INFO     | BatchPipeline        | Basic PDB to PDBQT conversion completed: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:19:53,409 | INFO     | BatchPipeline        | Protein prepared: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:19:53,410 | INFO     | BatchPipeline        | Processing ligand: ligand1
+2025-07-08 16:19:53,410 | INFO     | BatchPipeline        | [ligand1] Stage 1: Preparing ligand structure
+2025-07-08 16:19:53,435 | INFO     | BatchPipeline        | [ligand1] Ligand prepared successfully
+2025-07-08 16:19:53,435 | INFO     | BatchPipeline        | [ligand1] Stage 2: Running traditional docking with engines: ['vina']
+2025-07-08 16:19:54,242 | INFO     | BatchPipeline        | [ligand1] Auto-detected box parameters: (np.float64(15.450639953878074), np.float64(26.054982415679383), np.float64(4.076263764774435), np.float64(54.0), np.float64(70.0), np.float64(72.0))
+2025-07-08 16:19:54,242 | INFO     | BatchPipeline        | [ligand1] Running VINA docking
+2025-07-08 16:19:54,275 | ERROR    | BatchPipeline        | [ligand1] VINA failed: [WinError 2] Δεν είναι δυνατή η εύρεση του καθορισμένου αρχείου από το σύστημα
+2025-07-08 16:19:54,275 | ERROR    | BatchPipeline        | [ligand1] Docking failed due to engine failures: vina: [WinError 2] Δεν είναι δυνατή η εύρεση του καθορισμένου αρχείου από το σύστημα
+2025-07-08 16:19:54,276 | INFO     | BatchPipeline        | Processing ligand: ligand2
+2025-07-08 16:19:54,276 | INFO     | BatchPipeline        | [ligand2] Stage 1: Preparing ligand structure
+2025-07-08 16:19:54,287 | INFO     | BatchPipeline        | [ligand2] Ligand prepared successfully
+2025-07-08 16:19:54,288 | INFO     | BatchPipeline        | [ligand2] Stage 2: Running traditional docking with engines: ['vina']
+2025-07-08 16:19:55,105 | INFO     | BatchPipeline        | [ligand2] Auto-detected box parameters: (np.float64(15.450639953878074), np.float64(26.054982415679383), np.float64(4.076263764774435), np.float64(54.0), np.float64(70.0), np.float64(72.0))
+2025-07-08 16:19:55,105 | INFO     | BatchPipeline        | [ligand2] Running VINA docking
+2025-07-08 16:19:55,130 | ERROR    | BatchPipeline        | [ligand2] VINA failed: [WinError 2] Δεν είναι δυνατή η εύρεση του καθορισμένου αρχείου από το σύστημα
+2025-07-08 16:19:55,131 | ERROR    | BatchPipeline        | [ligand2] Docking failed due to engine failures: vina: [WinError 2] Δεν είναι δυνατή η εύρεση του καθορισμένου αρχείου από το σύστημα
+2025-07-08 16:19:55,131 | INFO     | BatchPipeline        | Processing ligand: aspirin
+2025-07-08 16:19:55,131 | INFO     | BatchPipeline        | [aspirin] Stage 1: Preparing ligand structure
+2025-07-08 16:19:55,139 | INFO     | BatchPipeline        | [aspirin] Ligand prepared successfully
+2025-07-08 16:19:55,140 | INFO     | BatchPipeline        | [aspirin] Stage 2: Running traditional docking with engines: ['vina']
+2025-07-08 16:19:55,939 | INFO     | BatchPipeline        | [aspirin] Auto-detected box parameters: (np.float64(15.450639953878074), np.float64(26.054982415679383), np.float64(4.076263764774435), np.float64(54.0), np.float64(70.0), np.float64(72.0))
+2025-07-08 16:19:55,939 | INFO     | BatchPipeline        | [aspirin] Running VINA docking
+2025-07-08 16:19:55,963 | ERROR    | BatchPipeline        | [aspirin] VINA failed: [WinError 2] Δεν είναι δυνατή η εύρεση του καθορισμένου αρχείου από το σύστημα
+2025-07-08 16:19:55,963 | ERROR    | BatchPipeline        | [aspirin] Docking failed due to engine failures: vina: [WinError 2] Δεν είναι δυνατή η εύρεση του καθορισμένου αρχείου από το σύστημα
+2025-07-08 16:19:55,963 | INFO     | BatchPipeline        | Processing ligand: aspirin_valid
+2025-07-08 16:19:55,964 | INFO     | BatchPipeline        | [aspirin_valid] Stage 1: Preparing ligand structure
+2025-07-08 16:19:55,970 | INFO     | BatchPipeline        | [aspirin_valid] Ligand prepared successfully
+2025-07-08 16:19:55,971 | INFO     | BatchPipeline        | [aspirin_valid] Stage 2: Running traditional docking with engines: ['vina']
+2025-07-08 16:19:56,775 | INFO     | BatchPipeline        | [aspirin_valid] Auto-detected box parameters: (np.float64(15.450639953878074), np.float64(26.054982415679383), np.float64(4.076263764774435), np.float64(54.0), np.float64(70.0), np.float64(72.0))
+2025-07-08 16:19:56,776 | INFO     | BatchPipeline        | [aspirin_valid] Running VINA docking
+2025-07-08 16:19:56,805 | ERROR    | BatchPipeline        | [aspirin_valid] VINA failed: [WinError 2] Δεν είναι δυνατή η εύρεση του καθορισμένου αρχείου από το σύστημα
+2025-07-08 16:19:56,806 | ERROR    | BatchPipeline        | [aspirin_valid] Docking failed due to engine failures: vina: [WinError 2] Δεν είναι δυνατή η εύρεση του καθορισμένου αρχείου από το σύστημα
+2025-07-08 16:19:56,809 | WARNING  | BatchPipeline        | No successful results to aggregate
+2025-07-08 16:19:56,809 | INFO     | BatchPipeline        | Resource cleanup completed
+2025-07-08 16:19:56,810 | INFO     | BatchPipeline        | Resource cleanup completed
+2025-07-08 16:20:16,787 | INFO     | BatchPipeline        | Discovered 4 ligand(s) to process
+2025-07-08 16:20:16,787 | INFO     | BatchPipeline        | Preparing protein structure: inputs/protein.pdb
+2025-07-08 16:20:16,788 | INFO     | BatchPipeline        | Preparing protein: cleaning, adding hydrogens, assigning Gasteiger charges, converting to PDBQT...
+2025-07-08 16:20:16,788 | INFO     | BatchPipeline        | MGLTools not found. Using simple PDB to PDBQT conversion...
+2025-07-08 16:20:16,793 | INFO     | BatchPipeline        | Basic PDB to PDBQT conversion completed: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:20:16,793 | INFO     | BatchPipeline        | Basic PDB to PDBQT conversion completed: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:20:16,794 | INFO     | BatchPipeline        | Protein prepared: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:20:16,794 | INFO     | BatchPipeline        | Processing ligand: aspirin
+2025-07-08 16:20:16,794 | INFO     | BatchPipeline        | [aspirin] Stage 1: Preparing ligand structure
+2025-07-08 16:20:16,813 | INFO     | BatchPipeline        | [aspirin] Ligand prepared successfully
+2025-07-08 16:20:16,813 | INFO     | BatchPipeline        | [aspirin] Stage 2: Running traditional docking with engines: ['vina']
+2025-07-08 16:20:17,627 | INFO     | BatchPipeline        | [aspirin] Auto-detected box parameters: (np.float64(15.450639953878074), np.float64(26.054982415679383), np.float64(4.076263764774435), np.float64(54.0), np.float64(70.0), np.float64(72.0))
+2025-07-08 16:20:17,627 | INFO     | BatchPipeline        | [aspirin] Running VINA docking
+2025-07-08 16:20:17,654 | ERROR    | BatchPipeline        | [aspirin] VINA failed: [WinError 2] Δεν είναι δυνατή η εύρεση του καθορισμένου αρχείου από το σύστημα
+2025-07-08 16:20:17,654 | ERROR    | BatchPipeline        | [aspirin] Docking failed due to engine failures: vina: [WinError 2] Δεν είναι δυνατή η εύρεση του καθορισμένου αρχείου από το σύστημα
+2025-07-08 16:20:17,654 | INFO     | BatchPipeline        | Processing ligand: aspirin_valid
+2025-07-08 16:20:17,655 | INFO     | BatchPipeline        | [aspirin_valid] Stage 1: Preparing ligand structure
+2025-07-08 16:20:17,661 | INFO     | BatchPipeline        | [aspirin_valid] Ligand prepared successfully
+2025-07-08 16:20:17,662 | INFO     | BatchPipeline        | [aspirin_valid] Stage 2: Running traditional docking with engines: ['vina']
+2025-07-08 16:20:18,460 | INFO     | BatchPipeline        | [aspirin_valid] Auto-detected box parameters: (np.float64(15.450639953878074), np.float64(26.054982415679383), np.float64(4.076263764774435), np.float64(54.0), np.float64(70.0), np.float64(72.0))
+2025-07-08 16:20:18,460 | INFO     | BatchPipeline        | [aspirin_valid] Running VINA docking
+2025-07-08 16:20:18,488 | ERROR    | BatchPipeline        | [aspirin_valid] VINA failed: [WinError 2] Δεν είναι δυνατή η εύρεση του καθορισμένου αρχείου από το σύστημα
+2025-07-08 16:20:18,488 | ERROR    | BatchPipeline        | [aspirin_valid] Docking failed due to engine failures: vina: [WinError 2] Δεν είναι δυνατή η εύρεση του καθορισμένου αρχείου από το σύστημα
+2025-07-08 16:20:18,488 | INFO     | BatchPipeline        | Processing ligand: ligand1
+2025-07-08 16:20:18,489 | INFO     | BatchPipeline        | [ligand1] Stage 1: Preparing ligand structure
+2025-07-08 16:20:18,500 | INFO     | BatchPipeline        | [ligand1] Ligand prepared successfully
+2025-07-08 16:20:18,500 | INFO     | BatchPipeline        | [ligand1] Stage 2: Running traditional docking with engines: ['vina']
+2025-07-08 16:20:19,290 | INFO     | BatchPipeline        | [ligand1] Auto-detected box parameters: (np.float64(15.450639953878074), np.float64(26.054982415679383), np.float64(4.076263764774435), np.float64(54.0), np.float64(70.0), np.float64(72.0))
+2025-07-08 16:20:19,291 | INFO     | BatchPipeline        | [ligand1] Running VINA docking
+2025-07-08 16:20:19,314 | ERROR    | BatchPipeline        | [ligand1] VINA failed: [WinError 2] Δεν είναι δυνατή η εύρεση του καθορισμένου αρχείου από το σύστημα
+2025-07-08 16:20:19,315 | ERROR    | BatchPipeline        | [ligand1] Docking failed due to engine failures: vina: [WinError 2] Δεν είναι δυνατή η εύρεση του καθορισμένου αρχείου από το σύστημα
+2025-07-08 16:20:19,315 | INFO     | BatchPipeline        | Processing ligand: ligand2
+2025-07-08 16:20:19,315 | INFO     | BatchPipeline        | [ligand2] Stage 1: Preparing ligand structure
+2025-07-08 16:20:19,325 | INFO     | BatchPipeline        | [ligand2] Ligand prepared successfully
+2025-07-08 16:20:19,326 | INFO     | BatchPipeline        | [ligand2] Stage 2: Running traditional docking with engines: ['vina']
+2025-07-08 16:20:20,114 | INFO     | BatchPipeline        | [ligand2] Auto-detected box parameters: (np.float64(15.450639953878074), np.float64(26.054982415679383), np.float64(4.076263764774435), np.float64(54.0), np.float64(70.0), np.float64(72.0))
+2025-07-08 16:20:20,114 | INFO     | BatchPipeline        | [ligand2] Running VINA docking
+2025-07-08 16:20:20,140 | ERROR    | BatchPipeline        | [ligand2] VINA failed: [WinError 2] Δεν είναι δυνατή η εύρεση του καθορισμένου αρχείου από το σύστημα
+2025-07-08 16:20:20,140 | ERROR    | BatchPipeline        | [ligand2] Docking failed due to engine failures: vina: [WinError 2] Δεν είναι δυνατή η εύρεση του καθορισμένου αρχείου από το σύστημα
+2025-07-08 16:20:20,143 | WARNING  | BatchPipeline        | No successful results to aggregate
+2025-07-08 16:20:20,143 | INFO     | BatchPipeline        | Resource cleanup completed
+2025-07-08 16:20:20,144 | INFO     | BatchPipeline        | Resource cleanup completed
+2025-07-08 16:22:37,467 | INFO     | BatchPipeline        | Discovered 4 ligand(s) to process
+2025-07-08 16:22:37,467 | INFO     | BatchPipeline        | Preparing protein structure: inputs/protein.pdb
+2025-07-08 16:22:37,468 | INFO     | BatchPipeline        | Preparing protein: cleaning, adding hydrogens, assigning Gasteiger charges, converting to PDBQT...
+2025-07-08 16:22:37,468 | INFO     | BatchPipeline        | MGLTools not found. Using simple PDB to PDBQT conversion...
+2025-07-08 16:22:37,473 | INFO     | BatchPipeline        | Basic PDB to PDBQT conversion completed: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:22:37,473 | INFO     | BatchPipeline        | Basic PDB to PDBQT conversion completed: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:22:37,473 | INFO     | BatchPipeline        | Protein prepared: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:22:37,474 | INFO     | BatchPipeline        | Processing ligand: aspirin
+2025-07-08 16:22:37,474 | INFO     | BatchPipeline        | [aspirin] Stage 1: Preparing ligand structure
+2025-07-08 16:22:37,492 | INFO     | BatchPipeline        | [aspirin] Ligand prepared successfully
+2025-07-08 16:22:37,493 | INFO     | BatchPipeline        | [aspirin] Stage 2: Running traditional docking with engines: ['vina']
+2025-07-08 16:22:38,323 | INFO     | BatchPipeline        | [aspirin] Auto-detected box parameters: (np.float64(15.450639953878074), np.float64(26.054982415679383), np.float64(4.076263764774435), np.float64(54.0), np.float64(70.0), np.float64(72.0))
+2025-07-08 16:22:38,324 | INFO     | BatchPipeline        | [aspirin] Running VINA docking
+2025-07-08 16:22:38,425 | INFO     | BatchPipeline        | [aspirin] VINA completed successfully
+2025-07-08 16:22:38,425 | INFO     | BatchPipeline        | [aspirin] Stage 7: Parsing traditional docking results
+2025-07-08 16:22:38,435 | INFO     | BatchPipeline        | [aspirin] Parsing completed, found 1 poses
+2025-07-08 16:22:38,436 | INFO     | BatchPipeline        | [aspirin] Processing completed successfully in 1.0s
+2025-07-08 16:22:38,436 | INFO     | BatchPipeline        | Processing ligand: aspirin_valid
+2025-07-08 16:22:38,436 | INFO     | BatchPipeline        | [aspirin_valid] Stage 1: Preparing ligand structure
+2025-07-08 16:22:38,443 | INFO     | BatchPipeline        | [aspirin_valid] Ligand prepared successfully
+2025-07-08 16:22:38,443 | INFO     | BatchPipeline        | [aspirin_valid] Stage 2: Running traditional docking with engines: ['vina']
+2025-07-08 16:22:39,253 | INFO     | BatchPipeline        | [aspirin_valid] Auto-detected box parameters: (np.float64(15.450639953878074), np.float64(26.054982415679383), np.float64(4.076263764774435), np.float64(54.0), np.float64(70.0), np.float64(72.0))
+2025-07-08 16:22:39,254 | INFO     | BatchPipeline        | [aspirin_valid] Running VINA docking
+2025-07-08 16:22:39,354 | INFO     | BatchPipeline        | [aspirin_valid] VINA completed successfully
+2025-07-08 16:22:39,355 | INFO     | BatchPipeline        | [aspirin_valid] Stage 7: Parsing traditional docking results
+2025-07-08 16:22:39,359 | INFO     | BatchPipeline        | [aspirin_valid] Parsing completed, found 1 poses
+2025-07-08 16:22:39,359 | INFO     | BatchPipeline        | [aspirin_valid] Processing completed successfully in 0.9s
+2025-07-08 16:22:39,359 | INFO     | BatchPipeline        | Processing ligand: ligand1
+2025-07-08 16:22:39,360 | INFO     | BatchPipeline        | [ligand1] Stage 1: Preparing ligand structure
+2025-07-08 16:22:39,371 | INFO     | BatchPipeline        | [ligand1] Ligand prepared successfully
+2025-07-08 16:22:39,372 | INFO     | BatchPipeline        | [ligand1] Stage 2: Running traditional docking with engines: ['vina']
+2025-07-08 16:22:40,192 | INFO     | BatchPipeline        | [ligand1] Auto-detected box parameters: (np.float64(15.450639953878074), np.float64(26.054982415679383), np.float64(4.076263764774435), np.float64(54.0), np.float64(70.0), np.float64(72.0))
+2025-07-08 16:22:40,192 | INFO     | BatchPipeline        | [ligand1] Running VINA docking
+2025-07-08 16:22:40,328 | INFO     | BatchPipeline        | [ligand1] VINA completed successfully
+2025-07-08 16:22:40,328 | INFO     | BatchPipeline        | [ligand1] Stage 7: Parsing traditional docking results
+2025-07-08 16:22:40,332 | INFO     | BatchPipeline        | [ligand1] Parsing completed, found 1 poses
+2025-07-08 16:22:40,332 | INFO     | BatchPipeline        | [ligand1] Processing completed successfully in 1.0s
+2025-07-08 16:22:40,332 | INFO     | BatchPipeline        | Processing ligand: ligand2
+2025-07-08 16:22:40,332 | INFO     | BatchPipeline        | [ligand2] Stage 1: Preparing ligand structure
+2025-07-08 16:22:40,343 | INFO     | BatchPipeline        | [ligand2] Ligand prepared successfully
+2025-07-08 16:22:40,343 | INFO     | BatchPipeline        | [ligand2] Stage 2: Running traditional docking with engines: ['vina']
+2025-07-08 16:22:41,166 | INFO     | BatchPipeline        | [ligand2] Auto-detected box parameters: (np.float64(15.450639953878074), np.float64(26.054982415679383), np.float64(4.076263764774435), np.float64(54.0), np.float64(70.0), np.float64(72.0))
+2025-07-08 16:22:41,166 | INFO     | BatchPipeline        | [ligand2] Running VINA docking
+2025-07-08 16:22:41,257 | INFO     | BatchPipeline        | [ligand2] VINA completed successfully
+2025-07-08 16:22:41,257 | INFO     | BatchPipeline        | [ligand2] Stage 7: Parsing traditional docking results
+2025-07-08 16:22:41,261 | INFO     | BatchPipeline        | [ligand2] Parsing completed, found 1 poses
+2025-07-08 16:22:41,261 | INFO     | BatchPipeline        | [ligand2] Processing completed successfully in 0.9s
+2025-07-08 16:22:41,272 | INFO     | BatchPipeline        | Final summary saved: outputs\final_summary.csv
+2025-07-08 16:22:41,272 | INFO     | BatchPipeline        | Total poses in final summary: 4
+2025-07-08 16:22:41,272 | INFO     | BatchPipeline        | Resource cleanup completed
+2025-07-08 16:22:41,273 | INFO     | BatchPipeline        | Resource cleanup completed
+2025-07-08 16:23:45,062 | INFO     | BatchPipeline        | Resource cleanup completed
+2025-07-08 16:25:00,528 | INFO     | BatchPipeline        | Resource cleanup completed
+2025-07-08 16:25:10,747 | INFO     | BatchPipeline        | Resource cleanup completed
+2025-07-08 16:26:03,449 | INFO     | BatchPipeline        | Resource cleanup completed
+2025-07-08 16:26:26,374 | INFO     | BatchPipeline        | Resource cleanup completed
+2025-07-08 16:28:36,966 | INFO     | BatchPipeline        | Discovered 4 ligand(s) to process
+2025-07-08 16:28:36,966 | INFO     | BatchPipeline        | Preparing protein structure: inputs/protein.pdb
+2025-07-08 16:28:36,967 | INFO     | BatchPipeline        | Preparing protein: cleaning, adding hydrogens, assigning Gasteiger charges, converting to PDBQT...
+2025-07-08 16:28:36,967 | INFO     | BatchPipeline        | MGLTools not found. Using simple PDB to PDBQT conversion...
+2025-07-08 16:28:36,972 | INFO     | BatchPipeline        | Basic PDB to PDBQT conversion completed: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:28:36,973 | INFO     | BatchPipeline        | Basic PDB to PDBQT conversion completed: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:28:36,973 | INFO     | BatchPipeline        | Protein prepared: outputs\prepared_structures\protein_prepared.pdbqt
+2025-07-08 16:28:36,973 | INFO     | BatchPipeline        | Processing ligand: aspirin
+2025-07-08 16:28:36,974 | INFO     | BatchPipeline        | [aspirin] Stage 1: Preparing ligand structure
+2025-07-08 16:28:37,002 | INFO     | BatchPipeline        | [aspirin] Ligand prepared successfully
+2025-07-08 16:28:37,002 | INFO     | BatchPipeline        | [aspirin] Stage 2: Running traditional docking with engines: ['vina']
+2025-07-08 16:28:37,786 | INFO     | BatchPipeline        | [aspirin] Auto-detected box parameters: (np.float64(15.450639953878074), np.float64(26.054982415679383), np.float64(4.076263764774435), np.float64(54.0), np.float64(70.0), np.float64(72.0))
+2025-07-08 16:28:37,787 | INFO     | BatchPipeline        | [aspirin] Running VINA docking
+2025-07-08 16:28:37,886 | INFO     | BatchPipeline        | [aspirin] VINA completed successfully
+2025-07-08 16:28:37,886 | INFO     | BatchPipeline        | [aspirin] Stage 7: Parsing traditional docking results
+2025-07-08 16:28:37,893 | INFO     | BatchPipeline        | [aspirin] Parsing completed, found 1 poses
+2025-07-08 16:28:37,893 | INFO     | BatchPipeline        | [aspirin] Processing completed successfully in 0.9s
+2025-07-08 16:28:37,894 | INFO     | BatchPipeline        | Processing ligand: aspirin_valid
+2025-07-08 16:28:37,894 | INFO     | BatchPipeline        | [aspirin_valid] Stage 1: Preparing ligand structure
+2025-07-08 16:28:37,901 | INFO     | BatchPipeline        | [aspirin_valid] Ligand prepared successfully
+2025-07-08 16:28:37,902 | INFO     | BatchPipeline        | [aspirin_valid] Stage 2: Running traditional docking with engines: ['vina']
+2025-07-08 16:28:38,716 | INFO     | BatchPipeline        | [aspirin_valid] Auto-detected box parameters: (np.float64(15.450639953878074), np.float64(26.054982415679383), np.float64(4.076263764774435), np.float64(54.0), np.float64(70.0), np.float64(72.0))
+2025-07-08 16:28:38,717 | INFO     | BatchPipeline        | [aspirin_valid] Running VINA docking
+2025-07-08 16:28:38,815 | INFO     | BatchPipeline        | [aspirin_valid] VINA completed successfully
+2025-07-08 16:28:38,815 | INFO     | BatchPipeline        | [aspirin_valid] Stage 7: Parsing traditional docking results
+2025-07-08 16:28:38,820 | INFO     | BatchPipeline        | [aspirin_valid] Parsing completed, found 1 poses
+2025-07-08 16:28:38,820 | INFO     | BatchPipeline        | [aspirin_valid] Processing completed successfully in 0.9s
+2025-07-08 16:28:38,820 | INFO     | BatchPipeline        | Processing ligand: ligand1
+2025-07-08 16:28:38,821 | INFO     | BatchPipeline        | [ligand1] Stage 1: Preparing ligand structure
+2025-07-08 16:28:38,834 | INFO     | BatchPipeline        | [ligand1] Ligand prepared successfully
+2025-07-08 16:28:38,835 | INFO     | BatchPipeline        | [ligand1] Stage 2: Running traditional docking with engines: ['vina']
+2025-07-08 16:28:39,638 | INFO     | BatchPipeline        | [ligand1] Auto-detected box parameters: (np.float64(15.450639953878074), np.float64(26.054982415679383), np.float64(4.076263764774435), np.float64(54.0), np.float64(70.0), np.float64(72.0))
+2025-07-08 16:28:39,638 | INFO     | BatchPipeline        | [ligand1] Running VINA docking
+2025-07-08 16:28:39,734 | INFO     | BatchPipeline        | [ligand1] VINA completed successfully
+2025-07-08 16:28:39,734 | INFO     | BatchPipeline        | [ligand1] Stage 7: Parsing traditional docking results
+2025-07-08 16:28:39,738 | INFO     | BatchPipeline        | [ligand1] Parsing completed, found 1 poses
+2025-07-08 16:28:39,738 | INFO     | BatchPipeline        | [ligand1] Processing completed successfully in 0.9s
+2025-07-08 16:28:39,738 | INFO     | BatchPipeline        | Processing ligand: ligand2
+2025-07-08 16:28:39,739 | INFO     | BatchPipeline        | [ligand2] Stage 1: Preparing ligand structure
+2025-07-08 16:28:39,749 | INFO     | BatchPipeline        | [ligand2] Ligand prepared successfully
+2025-07-08 16:28:39,750 | INFO     | BatchPipeline        | [ligand2] Stage 2: Running traditional docking with engines: ['vina']
+2025-07-08 16:28:40,548 | INFO     | BatchPipeline        | [ligand2] Auto-detected box parameters: (np.float64(15.450639953878074), np.float64(26.054982415679383), np.float64(4.076263764774435), np.float64(54.0), np.float64(70.0), np.float64(72.0))
+2025-07-08 16:28:40,548 | INFO     | BatchPipeline        | [ligand2] Running VINA docking
+2025-07-08 16:28:40,639 | INFO     | BatchPipeline        | [ligand2] VINA completed successfully
+2025-07-08 16:28:40,639 | INFO     | BatchPipeline        | [ligand2] Stage 7: Parsing traditional docking results
+2025-07-08 16:28:40,642 | INFO     | BatchPipeline        | [ligand2] Parsing completed, found 1 poses
+2025-07-08 16:28:40,643 | INFO     | BatchPipeline        | [ligand2] Processing completed successfully in 0.9s
+2025-07-08 16:28:40,652 | INFO     | BatchPipeline        | Final summary saved: outputs\final_summary.csv
+2025-07-08 16:28:40,653 | INFO     | BatchPipeline        | Total poses in final summary: 4
+2025-07-08 16:28:40,653 | INFO     | BatchPipeline        | Resource cleanup completed
+2025-07-08 16:28:40,654 | INFO     | BatchPipeline        | Resource cleanup completed

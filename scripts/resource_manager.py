@@ -5,10 +5,12 @@ Handles temporary file cleanup and resource tracking.
 """
 
 import os
+from utils.path_manager import get_path_manager, get_path, get_absolute_path, ensure_dir
 import tempfile
 import shutil
 import atexit
 import logging
+from utils.logging import setup_logging, log_startup, log_shutdown, log_error_with_context
 import threading
 from pathlib import Path
 from typing import List, Set, Optional, Callable
@@ -220,7 +222,7 @@ def safe_cleanup(func: Callable) -> Callable:
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            logging.error(f"Function {func.__name__} failed: {e}")
+            logger.error(f"Function {func.__name__} failed: {e}")
             raise
         finally:
             # Trigger cleanup on function exit
@@ -249,20 +251,20 @@ class FileBackup:
         if os.path.exists(self.file_path):
             shutil.copy2(self.file_path, self.backup_path)
             self.backup_created = True
-            logging.debug(f"Created backup: {self.backup_path}")
+            logger.debug(f"Created backup: {self.backup_path}")
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Restore backup if an exception occurred."""
         if exc_type is not None and self.backup_created:
-            logging.warning(f"Restoring backup due to exception: {exc_type}")
+            logger.warning(f"Restoring backup due to exception: {exc_type}")
             shutil.copy2(self.backup_path, self.file_path)
-            logging.info(f"Restored file from backup: {self.file_path}")
+            logger.info(f"Restored file from backup: {self.file_path}")
         
         # Clean up backup file
         if self.backup_created and os.path.exists(self.backup_path):
             os.unlink(self.backup_path)
-            logging.debug(f"Removed backup file: {self.backup_path}")
+            logger.debug(f"Removed backup file: {self.backup_path}")
 
 
 def cleanup_on_exit():

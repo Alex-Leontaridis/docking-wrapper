@@ -5,7 +5,9 @@ Provides comprehensive validation for protein and ligand files.
 """
 
 import os
+from utils.path_manager import get_path_manager, get_path, get_absolute_path, ensure_dir
 import logging
+from utils.logging import setup_logging, log_startup, log_shutdown, log_error_with_context
 from pathlib import Path
 from typing import Tuple, List, Dict, Optional
 import tempfile
@@ -18,7 +20,7 @@ try:
     RDKIT_AVAILABLE = True
 except ImportError:
     RDKIT_AVAILABLE = False
-    logging.warning("RDKit not available - molecular validation will be limited")
+    logger.warning("RDKit not available - molecular validation will be limited")
 
 # BioPython imports for protein validation
 try:
@@ -27,7 +29,7 @@ try:
     BIOPYTHON_AVAILABLE = True
 except ImportError:
     BIOPYTHON_AVAILABLE = False
-    logging.warning("BioPython not available - protein validation will be limited")
+    logger.warning("BioPython not available - protein validation will be limited")
 
 
 class InputValidator:

@@ -1,0 +1,173 @@
+{
+  "engines": {
+    "vina": {
+      "enabled": true,
+      "exhaustiveness": 8,
+      "num_modes": 9,
+      "energy_range": 3,
+      "cpu": 0,
+      "seed": 0,
+      "min_rmsd": 1.0,
+      "max_evals": 0
+    },
+    "gnina": {
+      "enabled": true,
+      "use_gpu": false,
+      "cnn_scoring": "rescore",
+      "cnn_model": "default",
+      "exhaustiveness": 8,
+      "num_modes": 9,
+      "energy_range": 3,
+      "minimize": true,
+      "autobox_add": 4,
+      "addH": false
+    },
+    "diffdock": {
+      "enabled": true,
+      "inference_steps": 20,
+      "samples_per_complex": 10,
+      "batch_size": 10,
+      "confidence_model": true,
+      "cache_dir": null,
+      "device": "cpu",
+      "actual_steps": null,
+      "no_final_step_noise": false
+    }
+  },
+  "ml_models": {
+    "equibind": {
+      "enabled": true,
+      "timeout": 600,
+      "use_gpu": false,
+      "batch_size": 1,
+      "num_poses": 1
+    },
+    "neuralplexer": {
+      "enabled": true,
+      "timeout": 600,
+      "use_gpu": false,
+      "batch_size": 1,
+      "num_poses": 1
+    },
+    "umol": {
+      "enabled": true,
+      "timeout": 600,
+      "use_gpu": false,
+      "batch_size": 1,
+      "num_poses": 1
+    },
+    "structure_predictor": {
+      "enabled": true,
+      "timeout": 1800,
+      "method": "colabfold",
+      "use_gpu": false,
+      "num_recycles": 3
+    }
+  },
+  "analysis": {
+    "boltz2": {
+      "enabled": false,
+      "timeout": 300,
+      "batch_size": 1
+    },
+    "interactions": {
+      "enabled": false,
+      "timeout": 300,
+      "method": "plip",
+      "fallback_to_rdkit": true
+    },
+    "druggability": {
+      "enabled": false,
+      "timeout": 300,
+      "min_pocket_volume": 100.0
+    },
+    "consensus": {
+      "enabled": false,
+      "rmsd_threshold": 2.0,
+      "min_poses": 2
+    },
+    "confidence": {
+      "enabled": false,
+      "weights": {
+        "consensus": 0.3,
+        "druggability": 0.2,
+        "affinity": 0.2,
+        "interactions": 0.3
+      }
+    }
+  },
+  "box": {
+    "auto_detect": true,
+    "detection_strategy": "auto",
+    "default_center": [0.0, 0.0, 0.0],
+    "default_size": [25.0, 25.0, 25.0],
+    "padding": 8.0,
+    "min_size": [15.0, 15.0, 15.0],
+    "max_size": [40.0, 40.0, 40.0],
+    "cavity_detection": {
+      "grid_spacing": 2.0,
+      "probe_radius": 1.4,
+      "min_cavity_volume": 100.0
+    }
+  },
+  "timeouts": {
+    "preparation": 300,
+    "vina": 1800,
+    "gnina": 3600,
+    "diffdock": 7200,
+    "parsing": 300,
+    "overall_per_ligand": 10800
+  },
+  "parallel": {
+    "max_workers": 2,
+    "chunk_size": 1,
+    "prefer_parallel": true,
+    "min_ligands_for_parallel": 2
+  },
+  "retry": {
+    "max_attempts": 2,
+    "retry_on_failure": ["preparation", "vina"],
+    "retry_delay": 5,
+    "exponential_backoff": true
+  },
+  "output": {
+    "keep_intermediate_files": true,
+    "compress_large_files": false,
+    "cleanup_failed_runs": false,
+    "detailed_logging": true,
+    "save_docking_logs": true,
+    "export_formats": ["csv", "json"]
+  },
+  "logging": {
+    "level": "INFO",
+    "max_file_size_mb": 100,
+    "backup_count": 5,
+    "console_output": true,
+    "timestamp_format": "%Y-%m-%d %H:%M:%S",
+    "log_performance": true,
+    "log_memory_usage": false
+  },
+  "filters": {
+    "min_poses_required": 1,
+    "max_poses_per_method": 50,
+    "affinity_cutoff": null,
+    "rmsd_cutoff": null,
+    "filter_duplicates": true,
+    "duplicate_rmsd_threshold": 2.0
+  },
+  "validation": {
+    "check_file_formats": true,
+    "validate_structures": true,
+    "check_dependencies": true,
+    "warn_on_large_molecules": true,
+    "max_atoms_per_ligand": 200,
+    "max_rotatable_bonds": 20
+  },
+  "performance": {
+    "memory_limit_gb": null,
+    "disk_space_check": true,
+    "min_free_space_gb": 5,
+    "monitor_resources": false,
+    "optimize_for": "speed"
+  }
+} 

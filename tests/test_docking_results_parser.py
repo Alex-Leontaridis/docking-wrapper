@@ -6,6 +6,7 @@ Unit tests for docking results parser.
 import unittest
 import tempfile
 import os
+from utils.path_manager import get_path_manager, get_path, get_absolute_path, ensure_dir
 import sys
 from pathlib import Path
 

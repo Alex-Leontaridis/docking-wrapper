@@ -94,3 +94,9 @@ environment.yml
 # Ignore gnina and DiffDock binaries
 /gnina-bin/
 /DiffDock/ 
+gnina
+vina.exe
+outputs/logs/batch_log.txt
+outputs/logs/batch_log.txt
+test_production_inputs/test_ligand.sdf
+test_production_inputs/test_protein.pdb

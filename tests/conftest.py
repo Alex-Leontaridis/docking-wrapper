@@ -5,6 +5,7 @@ Pytest configuration and fixtures for docking wrapper tests.
 import pytest
 import tempfile
 import os
+from utils.path_manager import get_path_manager, get_path, get_absolute_path, ensure_dir
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -101,7 +102,7 @@ def sample_config():
 def mock_docking_tools(test_data_dir):
     """Create mock docking tools for testing."""
     bin_dir = os.path.join(test_data_dir, 'bin')
-    os.makedirs(bin_dir, exist_ok=True)
+    ensure_dir(bin_dir)
     
     # Mock Vina
     vina_path = os.path.join(bin_dir, 'vina')

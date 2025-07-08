@@ -6,6 +6,7 @@ Integration tests for the complete docking pipeline.
 import unittest
 import tempfile
 import os
+from utils.path_manager import get_path_manager, get_path, get_absolute_path, ensure_dir
 import sys
 import json
 from pathlib import Path
@@ -76,7 +77,7 @@ M  END""")
         
         # Mock configuration
         mock_config = MagicMock()
-        mock_config.mgltools_path = '/mock/mgltools'
+        mock_config.mgltools_path = get_path("/mock/mgltools")
         mock_config.docking_engines = {'vina': '/mock/vina'}
         mock_config.output_dir = self.config['output_dir']
         mock_config.log_level = 'INFO'
@@ -182,7 +183,7 @@ M  END""")
         """Test configuration system integration."""
         # Create configuration
         config = Config()
-        config.mgltools_path = '/test/mgltools'
+        config.mgltools_path = get_path("/test/mgltools")
         config.output_dir = self.config['output_dir']
         
         # Check configuration properties

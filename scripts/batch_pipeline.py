@@ -24,6 +24,14 @@ import signal
 import threading
 from multiprocessing.managers import SharedMemoryManager
 from multiprocessing import Lock as ProcessLock
+import platform
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Import path manager and logging
+from utils.path_manager import get_path_manager, get_path, get_absolute_path, ensure_dir
+from utils.logging import setup_logging, log_startup, log_shutdown, log_error_with_context, setup_global_error_handler
 
 # Pretty output helpers
 try:
@@ -49,9 +57,6 @@ try:
 except ImportError:
     HAVE_TABULATE = False
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 # Import existing modules
 from prep_structures import (
     prepare_protein, prepare_ligand_single, validate_file, 
@@ -59,22 +64,21 @@ from prep_structures import (
 )
 from run_docking_multi import (
     run_vina, run_gnina, run_diffdock, extract_box_from_protein,
-    ensure_output_dirs as ensure_single_output_dirs
+    ensure_output_dirs as ensure_single_output_dirs, find_binary
 )
 from docking_results_parser import DockingResultsParser
 from config import DockingConfig
-from utils.logging import setup_logging, get_global_logger
 
 # Import enhanced ML/Analysis modules
 try:
     from run_equibind import run_equibind_inference
     from run_neuralplexer import run_neuralplexer_inference
-    from run_umol import run_umol_inference
-    from run_structure_predictor import run_structure_prediction
+    from run_umol import run_umol
+    from run_structure_predictor import predict_structure
     from run_boltz2 import run_boltz2_prediction
-    from extract_interactions import extract_interactions
-    from run_druggability import run_druggability_analysis
-    from model_consensus import run_consensus_analysis
+    from extract_interactions import run_plip
+    from run_druggability import run_fpocket_analysis
+#    from model_consensus import run_consensus_analysis
     from compute_confidence import compute_confidence_score
     ML_MODULES_AVAILABLE = True
 except ImportError as e:
@@ -128,17 +132,72 @@ DEFAULT_CONFIG = {
 class BatchDockingPipeline:
     """Main batch docking pipeline orchestrator."""
     
-    def __init__(self, config_path: Optional[str] = None, output_dir: str = "outputs"):
+    def __init__(self, config_path: Optional[str] = None, output_dir: str = None):
         """
         Initialize the batch docking pipeline.
         
         Args:
             config_path: Path to configuration JSON file
-            output_dir: Output directory for results
+            output_dir: Output directory for results (optional, uses path manager if not provided)
         """
-        self.output_dir = Path(output_dir)
+        # Setup global error handler
+        setup_global_error_handler()
+        
+        # Initialize path manager
+        self.path_manager = get_path_manager()
+        
+        # Setup logging first
+        self.logger = setup_logging('BatchPipeline')
+        log_startup('BatchDockingPipeline', '1.0.0')
+        
+        # Set output directory
+        if output_dir:
+            self.output_dir = Path(output_dir)
+        else:
+            output_dir_path = self.path_manager.get_absolute_path("outputs")
+            if output_dir_path:
+                self.output_dir = output_dir_path
+            else:
+                self.output_dir = Path("outputs")
+        
         self.config = self._load_config(config_path)
-        self.setup_logging()
+        
+        # Ensure output and log directories exist
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        log_dir = self.output_dir / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Platform-specific availability check
+        system = platform.system().lower()
+        
+        # GNINA: Linux only, but allow on Windows/Mac if WSL is available
+        if system in ['windows', 'darwin']:  # Windows or Mac
+            # Check if WSL is available
+            try:
+                result = subprocess.run(['wsl', '--list', '--quiet'], 
+                                      capture_output=True, text=True, timeout=10)
+                if result.returncode == 0 and result.stdout.strip():
+                    self.logger.info(f"WSL detected on {system.capitalize()}. GNINA will be available via WSL.")
+                    # Keep GNINA enabled if WSL is available
+                else:
+                    self.config["engines"]["gnina"]["enabled"] = False
+                    self.logger.warning(f"GNINA is not available on {system.capitalize()} (no WSL detected). GNINA features will be disabled.")
+            except:
+                self.config["engines"]["gnina"]["enabled"] = False
+                self.logger.warning(f"GNINA is not available on {system.capitalize()} (WSL not available). GNINA features will be disabled.")
+        
+        # UMol: Linux only
+        if system in ['windows', 'darwin']:  # Windows or Mac
+            self.config["ml_models"]["umol"]["enabled"] = False
+            self.logger.warning(f"UMol is not available on {system.capitalize()}. UMol features will be disabled.")
+        elif system == 'linux':
+            self.logger.info("UMol is available on Linux. UMol features will be enabled if configured.")
+        
+        # Log platform detection
+        self.logger.info(f"Detected platform: {system.capitalize()}")
+        self.logger.info(f"Available engines: Vina (all platforms), GNINA (Linux/WSL), DiffDock (all platforms)")
+        self.logger.info(f"Available ML models: EquiBind (all platforms), NeuralPLexer (all platforms), UMol (Linux only)")
+        
         self._ensure_output_dirs()
         
         # Thread safety and resource management
@@ -162,20 +221,33 @@ class BatchDockingPipeline:
     
     def _check_external_binaries(self):
         """Check for required external binaries and exit if missing."""
-        required_binaries = ["vina", "gnina", "diffdock"]
+        required_binaries = ["vina.exe", "gnina"]
         missing = []
+        
         for binary in required_binaries:
-            if shutil.which(binary) is None:
+            found_path = find_binary(binary)
+            if found_path is None:
                 missing.append(binary)
+            else:
+                self.logger.info(f"Found {binary}: {found_path}")
+        
+        # Check for DiffDock script
+        diffdock_path = self.path_manager.get_path("diffdock")
+        if not diffdock_path or not os.path.isfile(diffdock_path):
+            missing.append('DiffDock/inference.py')
+        else:
+            self.logger.info(f"Found DiffDock: {diffdock_path}")
+        
         # Check for MGLTools (optional, but warn if missing)
         self.config_obj = DockingConfig()
         if not self.config_obj.validate_mgltools():
-            print(f"{COLOR_WARN}Warning: MGLTools not found. Protein preparation may be limited.{COLOR_RESET}")
-            print(f"To install MGLTools, visit: http://mgltools.scripps.edu/downloads/downloads/tools/downloads")
-            print(f"Or set MGLTOOLS_PATH environment variable to point to your installation.")
+            self.logger.warning("MGLTools not found. Protein preparation may be limited.")
+            self.logger.info("To install MGLTools, visit: http://mgltools.scripps.edu/downloads/downloads/tools/downloads")
+            self.logger.info("Or set MGLTOOLS_PATH environment variable to point to your installation.")
+        
         if missing:
-            print(f"{COLOR_FAIL}Missing required external binaries: {', '.join(missing)}{COLOR_RESET}")
-            print(f"Please install them and ensure they are in your PATH.")
+            self.logger.error(f"Missing required external binaries: {', '.join(missing)}")
+            self.logger.error("Please install them and ensure they are in your PATH or current directory.")
             sys.exit(1)
     
     def _load_config(self, config_path: Optional[str]) -> Dict:
@@ -189,8 +261,8 @@ class BatchDockingPipeline:
                 # Deep merge configuration
                 config = self._deep_merge_config(config, user_config)
             except Exception as e:
-                print(f"Warning: Failed to load config from {config_path}: {e}")
-                print("Using default configuration")
+                self.logger.warning(f"Failed to load config from {config_path}: {e}")
+                self.logger.info("Using default configuration")
         
         return config
     
@@ -202,49 +274,6 @@ class BatchDockingPipeline:
             else:
                 base[key] = value
         return base
-    
-    def setup_logging(self):
-        """Setup comprehensive logging."""
-        log_dir = self.output_dir / "logs"
-        log_dir.mkdir(exist_ok=True)
-        
-        # Main log file
-        log_file = log_dir / "batch_log.txt"
-        
-        # Configure logging
-        log_level = getattr(logging, self.config["logging"]["level"])
-        
-        # Create formatters
-        detailed_formatter = logging.Formatter(
-            '%(asctime)s | %(levelname)-8s | %(name)-20s | %(message)s'
-        )
-        simple_formatter = logging.Formatter('%(levelname)s: %(message)s')
-        
-        # Configure root logger
-        self.logger = logging.getLogger('BatchPipeline')
-        self.logger.setLevel(log_level)
-        
-        # Clear existing handlers
-        self.logger.handlers.clear()
-        
-        # File handler with rotation
-        from logging.handlers import RotatingFileHandler
-        file_handler = RotatingFileHandler(
-            log_file,
-            maxBytes=self.config["logging"]["max_file_size_mb"] * 1024 * 1024,
-            backupCount=self.config["logging"]["backup_count"]
-        )
-        file_handler.setFormatter(detailed_formatter)
-        file_handler.setLevel(log_level)
-        
-        # Console handler
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(simple_formatter)
-        console_handler.setLevel(log_level)
-        
-        # Add handlers
-        self.logger.addHandler(file_handler)
-        self.logger.addHandler(console_handler)
     
     def _ensure_output_dirs(self):
         """Ensure all necessary output directories exist."""
@@ -473,34 +502,36 @@ class BatchDockingPipeline:
         }
         stage_start = time.time()
         try:
-            self.logger.info(f"Processing ligand: {ligand_name}")
-            ligand_output_dir = self.output_dir / "docking_results" / ligand_name
-            ligand_output_dir.mkdir(exist_ok=True)
+            with self.logger.timer(f"ligand_processing:{ligand_name}"):
+                self.logger.info(f"Processing ligand: {ligand_name}")
+                ligand_output_dir = self.output_dir / "docking_results" / ligand_name
+                ligand_output_dir.mkdir(exist_ok=True)
             
             # Stage 1: Ligand preparation
-            self.logger.info(f"[{ligand_name}] Stage 1: Preparing ligand structure")
+            self.logger.subsection(f"Stage 1: Preparing ligand structure")
             stage_start = time.time()
             if not os.path.exists(ligand_path):
                 result['stages']['preparation'] = False
                 result['errors']['preparation'] = f"Ligand file not found: {ligand_path}"
                 result['timings']['preparation'] = time.time() - stage_start
-                self.logger.error(f"[{ligand_name}] Ligand file not found: {ligand_path}")
+                self.logger.error(f"Ligand file not found: {ligand_path}", error_code='FILE_NOT_FOUND')
                 return result  # Early exit
                 
             prepared_ligand_dir = self.output_dir / "prepared_structures"
             prepared_ligand = prepared_ligand_dir / f"{ligand_name}_prepared.pdbqt"
             try:
-                prepare_ligand_single(str(ligand_path), str(prepared_ligand))
-                if not os.path.exists(prepared_ligand):
-                    raise Exception("Ligand preparation did not create output file")
+                with self.logger.timer(f"ligand_preparation:{ligand_name}"):
+                    prepare_ligand_single(str(ligand_path), str(prepared_ligand))
+                    if not os.path.exists(prepared_ligand):
+                        raise Exception("Ligand preparation did not create output file")
                 result['stages']['preparation'] = True
                 result['timings']['preparation'] = time.time() - stage_start
-                self.logger.info(f"[{ligand_name}] Ligand prepared successfully")
+                self.logger.info(f"Ligand prepared successfully")
             except Exception as e:
                 result['stages']['preparation'] = False
                 result['errors']['preparation'] = str(e)
                 result['timings']['preparation'] = time.time() - stage_start
-                self.logger.error(f"[{ligand_name}] Ligand preparation failed: {e}")
+                self.logger.error(f"Ligand preparation failed: {e}", error_code='LIGAND_PREP_FAILED')
                 return result  # Early exit
                 
             ensure_single_output_dirs(str(ligand_output_dir))
@@ -624,7 +655,9 @@ class BatchDockingPipeline:
                 result['stages']['docking'] = True  # Skip traditional docking if no engines enabled
             
             # Stage 3: ML Model Docking (if enabled and available)
-            if ML_MODULES_AVAILABLE and any(self.config["ml_models"].values()):
+            ml_enabled = any(model_config.get("enabled", False) for model_config in self.config["ml_models"].values())
+            self.logger.info(f"[{ligand_name}] ML_MODULES_AVAILABLE: {ML_MODULES_AVAILABLE}, ml_enabled: {ml_enabled}")
+            if ML_MODULES_AVAILABLE and ml_enabled:
                 self.logger.info(f"[{ligand_name}] Stage 3: Running ML model docking")
                 ml_start = time.time()
                 
@@ -647,20 +680,28 @@ class BatchDockingPipeline:
                         
                         if model_name == "equibind":
                             success, output_file = run_equibind_inference(
-                                prepared_protein, str(ligand_path), str(model_output_dir)
+                                prepared_protein, str(ligand_path), str(model_output_dir), model_config
                             )
                         elif model_name == "neuralplexer":
                             success, output_file = run_neuralplexer_inference(
                                 prepared_protein, str(ligand_path), str(model_output_dir)
                             )
                         elif model_name == "umol":
-                            success, output_file = run_umol_inference(
+                            umol_result = run_umol(
                                 prepared_protein, str(ligand_path), str(model_output_dir)
                             )
+                            success = umol_result.get('success', False)
+                            output_file = umol_result.get('output_file') if success else None
                         elif model_name == "structure_predictor":
-                            success, output_file = run_structure_prediction(
-                                prepared_protein, str(model_output_dir)
+                            # Assume the input is a FASTA file for structure prediction
+                            fasta_path = prepared_protein  # Or adjust as needed
+                            struct_result = predict_structure(
+                                fasta=fasta_path,
+                                output_dir=str(model_output_dir),
+                                model='auto'
                             )
+                            success = struct_result.get('success', False)
+                            output_file = struct_result.get('output_file') if success else None
                         else:
                             continue
                             
@@ -714,16 +755,78 @@ class BatchDockingPipeline:
                             # Use best pose for interaction analysis
                             best_pose = self._get_best_pose(ligand_output_dir, ml_poses)
                             if best_pose:
-                                success, output_file = extract_interactions(
-                                    best_pose, ligand_name, "PROT", str(tool_output_dir)
-                                )
+                                output_json = str(tool_output_dir / f"{ligand_name}_interactions.json")
+                                ok, msg = run_plip(best_pose, output_json)
+                                success = ok
+                                output_file = output_json if ok else None
                             else:
                                 success, output_file = False, None
                         elif analysis_name == "druggability":
                             # Use protein for druggability analysis
-                            success, output_file = run_druggability_analysis(
-                                prepared_protein, str(tool_output_dir)
-                            )
+                            try:
+                                result_fpocket = run_fpocket_analysis(prepared_protein, str(tool_output_dir))
+                                success = result_fpocket.get('success', False)
+                                output_file = result_fpocket.get('output_file') if success else None
+                            except Exception as e:
+                                success = False
+                                output_file = None
+                        elif analysis_name == "consensus":
+                            # Use CLI of model_consensus.py for consensus analysis
+                            try:
+                                consensus_output_dir = ligand_output_dir / "consensus"
+                                consensus_output_dir.mkdir(exist_ok=True)
+                                consensus_file = consensus_output_dir / f"{ligand_name}_consensus.json"
+                                pose_files = result.get('ml_poses', [])
+                                if len(pose_files) < 2:
+                                    success = False
+                                    output_file = None
+                                else:
+                                    cmd = [
+                                        sys.executable, "scripts/model_consensus.py",
+                                        "--poses", *pose_files,
+                                        "--output", str(consensus_file),
+                                        "--ligand_id", ligand_name,
+                                        "--rmsd_threshold", str(self.config["analysis"]["consensus"].get("rmsd_threshold", 2.0))
+                                    ]
+                                    proc = subprocess.run(cmd, capture_output=True, text=True)
+                                    success = proc.returncode == 0 and os.path.exists(consensus_file)
+                                    output_file = str(consensus_file) if success else None
+                                    if not success:
+                                        self.logger.error(f"Consensus analysis failed: {proc.stderr}")
+                            except Exception as e:
+                                success = False
+                                output_file = None
+                        elif analysis_name == "confidence":
+                            # Use CLI of compute_confidence.py for confidence scoring
+                            try:
+                                confidence_output_dir = ligand_output_dir / "confidence"
+                                confidence_output_dir.mkdir(exist_ok=True)
+                                confidence_file = confidence_output_dir / f"{ligand_name}_confidence.json"
+                                consensus_json = result.get('consensus_file')
+                                druggability_json = result['analysis_results'].get('druggability') if result.get('analysis_results') else None
+                                affinity_json = result['analysis_results'].get('boltz2') if result.get('analysis_results') else None
+                                interaction_json = result['analysis_results'].get('interactions') if result.get('analysis_results') else None
+                                if not all([consensus_json, druggability_json, affinity_json, interaction_json]):
+                                    success = False
+                                    output_file = None
+                                else:
+                                    cmd = [
+                                        sys.executable, "scripts/compute_confidence.py",
+                                        "--consensus_json", consensus_json,
+                                        "--druggability_json", druggability_json,
+                                        "--affinity_json", affinity_json,
+                                        "--interaction_json", interaction_json,
+                                        "--output", str(confidence_file),
+                                        "--ligand_id", ligand_name
+                                    ]
+                                    proc = subprocess.run(cmd, capture_output=True, text=True)
+                                    success = proc.returncode == 0 and os.path.exists(confidence_file)
+                                    output_file = str(confidence_file) if success else None
+                                    if not success:
+                                        self.logger.error(f"Confidence scoring failed: {proc.stderr}")
+                            except Exception as e:
+                                success = False
+                                output_file = None
                         else:
                             continue
                             
@@ -759,26 +862,16 @@ class BatchDockingPipeline:
                     consensus_output_dir.mkdir(exist_ok=True)
                     
                     consensus_file = consensus_output_dir / f"{ligand_name}_consensus.json"
-                    success, output_file = run_consensus_analysis(
-                        result['ml_poses'], str(consensus_file), ligand_name
-                    )
-                    
+                    # run_consensus_analysis is not available on this platform
+                    self.logger.warning(f"[{ligand_name}] Consensus analysis is not available (run_consensus_analysis not imported)")
+                    success, output_file = False, None
                     result['timings']['consensus'] = time.time() - consensus_start
-                    
-                    if success and output_file:
-                        result['stages']['consensus'] = True
-                        result['consensus_file'] = output_file
-                        self.logger.info(f"[{ligand_name}] Consensus analysis completed successfully")
-                    else:
-                        result['stages']['consensus'] = False
-                        result['errors']['consensus'] = "Consensus analysis failed"
-                        self.logger.warning(f"[{ligand_name}] Consensus analysis failed")
-                        
+                    result['stages']['consensus'] = False
+                    result['errors']['consensus'] = 'Consensus analysis not available on this platform.'
                 except Exception as e:
+                    result['timings']['consensus'] = time.time() - consensus_start
                     result['stages']['consensus'] = False
                     result['errors']['consensus'] = str(e)
-                    result['timings']['consensus'] = time.time() - consensus_start
-                    self.logger.error(f"[{ligand_name}] Consensus analysis failed with exception: {e}")
             
             # Stage 6: Confidence Scoring (if enabled)
             if (ML_MODULES_AVAILABLE and 

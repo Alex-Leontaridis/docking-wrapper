@@ -1,0 +1,29 @@
+{
+  "project_root": "",
+  "scripts": "",
+  "utils": "",
+  "config": "",
+  "tests": "",
+  "docs": "",
+  "docker": "",
+  "bin": "",
+  "outputs": "",
+  "logs": "",
+  "temp": "",
+  "cache": "",
+  "vina": null,
+  "gnina": null,
+  "diffdock": null,
+  "mgltools": null,
+  "models": {
+    "equibind": "",
+    "neuralplexer": "",
+    "umol": "",
+    "boltz2": ""
+  },
+  "data": {
+    "inputs": "",
+    "test_data": "",
+    "examples": ""
+  }
+} 

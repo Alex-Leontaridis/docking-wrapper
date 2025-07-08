@@ -1,0 +1,9 @@
+ligand_name,engine,pose_id,affinity_kcal_per_mol,confidence_score,pose_file,status
+aspirin_valid,vina,1,-7.234,,production_output\docking_results\aspirin_valid\vina_output\vina_out.pdbqt,success
+aspirin_valid,vina,2,-6.891,,production_output\docking_results\aspirin_valid\vina_output\vina_out.pdbqt,success
+aspirin_valid,vina,3,-6.445,,production_output\docking_results\aspirin_valid\vina_output\vina_out.pdbqt,success
+aspirin_valid,gnina,1,,,production_output\docking_results\aspirin_valid\gnina_output\gnina_out.sdf,success
+aspirin_valid,diffdock,1,,0.85,production_output\docking_results\aspirin_valid\diffdock_output\diffdock_out.sdf,success
+aspirin_valid,diffdock,2,,0.72,production_output\docking_results\aspirin_valid\diffdock_output\pose_1.sdf,success
+aspirin_valid,diffdock,3,,0.68,production_output\docking_results\aspirin_valid\diffdock_output\pose_2.sdf,success
+aspirin_valid,diffdock,4,,,production_output\docking_results\aspirin_valid\diffdock_output\pose_3.sdf,success

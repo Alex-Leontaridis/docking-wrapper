@@ -1,5 +1,6 @@
 import argparse
 import os
+from utils.path_manager import get_path_manager, get_path, get_absolute_path, ensure_dir
 import subprocess
 import sys
 import time
@@ -10,7 +11,7 @@ from pathlib import Path
 
 # Load configuration
 def load_config():
-    config_path = "tools_config.json"
+    config_path = get_path("tools_config.json")
     if os.path.exists(config_path):
         with open(config_path, 'r') as f:
             return json.load(f)
@@ -157,7 +158,7 @@ def main():
         sys.exit(1)
     
     # Create output directory
-    os.makedirs(args.output, exist_ok=True)
+    ensure_dir(args.output)
     
     # Run NeuralPLexer
     start_time = time.time()

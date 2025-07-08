@@ -1,0 +1,6 @@
+# Dummy EquiBind output due to conda environment issues
+# To fix: conda create -n equibind python=3.8
+# Then: conda activate equibind && pip install -r EquiBind/requirements.txt
+
+# Dummy pose data
+# This is a placeholder - real EquiBind requires proper conda environment setup

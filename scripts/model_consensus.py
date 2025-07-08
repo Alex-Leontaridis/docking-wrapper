@@ -16,6 +16,7 @@ Outputs:
 
 import argparse
 import os
+from utils.path_manager import get_path_manager, get_path, get_absolute_path, ensure_dir
 import sys
 import json
 import numpy as np
@@ -138,7 +139,7 @@ def main():
         "notes": "Consensus score = fraction of poses in largest cluster (RMSD ≤ threshold)"
     }
 
-    os.makedirs(os.path.dirname(output_json), exist_ok=True)
+    ensure_dir(os.path.dirname(output_json))
     with open(output_json, 'w') as f:
         json.dump(result, f, indent=2)
 

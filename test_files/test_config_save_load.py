@@ -1,7 +1,7 @@
 from config import Config
 config = Config()
-config.mgltools_path = '/test/path'
-config.output_dir = '/test/output'
+config.mgltools_path = get_path("/test/path")
+config.output_dir = get_path("/test/output")
 import json
 with open('test_config.json', 'w') as f:
     json.dump(config.get_config_dict(), f)
