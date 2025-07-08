@@ -1,3 +1,6 @@
+# Python version requirement
+python>=3.10,<3.11
+
 # Only standard library required for orchestrator and runners
 # Add model-specific dependencies here if needed in the future
 

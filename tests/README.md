@@ -68,7 +68,7 @@ tests/
 The project includes several GitHub Actions workflows:
 
 1. **Main Tests** (`.github/workflows/tests.yml`):
-   - Runs on multiple Python versions (3.8-3.11)
+   - Runs on multiple Python versions (3.8-3.10)
    - Tests on Ubuntu and Windows
    - Includes linting and security checks
    - Generates coverage reports
@@ -147,7 +147,7 @@ Since the project depends on external docking tools (Vina, GNINA, DiffDock), we 
 ### Platforms
 - Ubuntu Latest
 - Windows Latest
-- Python 3.8, 3.9, 3.10, 3.11
+- Python 3.8, 3.9, 3.10
 
 ### Artifacts
 - Coverage reports

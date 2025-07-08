@@ -7,7 +7,7 @@ This guide provides step-by-step instructions for installing and configuring the
 ## Prerequisites
 
 ### System Requirements
-- **Python**: 3.7 or higher
+- **Python**: 3.10 (recommended for best compatibility)
 - **Operating System**: Windows, macOS, or Linux
 - **Memory**: Minimum 4GB RAM (8GB+ recommended)
 - **Storage**: At least 2GB free space
@@ -40,7 +40,7 @@ pip install rdkit-pypi numpy pandas scikit-learn meeko colorama tabulate
 #### Option B: Using conda
 ```bash
 # Create new environment
-conda create -n docking-wrapper python=3.9
+conda create -n docking-wrapper python=3.10
 conda activate docking-wrapper
 
 # Install packages
