@@ -19,6 +19,11 @@ import subprocess
 import shutil
 from multiprocessing import Pool, cpu_count
 from functools import partial
+import threading
+from multiprocessing import Lock as ProcessLock
+from multiprocessing.managers import SharedMemoryManager
+import atexit
+import signal
 
 # Pretty output helpers
 try:
@@ -93,27 +98,36 @@ class BatchDockingPipeline:
     """Main batch docking pipeline orchestrator."""
     
     def __init__(self, config_path: Optional[str] = None, output_dir: str = "outputs"):
+        """
+        Initialize the batch docking pipeline.
+        
+        Args:
+            config_path: Path to configuration JSON file
+            output_dir: Output directory for results
+        """
         self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(exist_ok=True)
-        
-        # Check for required external binaries
-        self._check_external_binaries()
-        
-        # Load configuration
         self.config = self._load_config(config_path)
-        
-        # Setup logging
         self.setup_logging()
+        self._ensure_output_dirs()
         
-        # Initialize tracking
-        self.ligand_results = {}
-        self.failed_ligands = {}
+        # Thread safety and resource management
+        self._lock = threading.Lock()
+        self._process_lock = ProcessLock()
+        self._shared_memory_manager = None
+        self._active_processes = set()
+        self._cleanup_registered = False
+        
+        # Register cleanup handlers
+        self._register_cleanup_handlers()
+        
+        # Statistics tracking (thread-safe)
         self.total_ligands = 0
         self.successful_ligands = 0
-        self.start_time = time.time()
+        self.failed_ligands = set()
+        self.ligand_results = {}
         
-        # Ensure base output directories
-        self._ensure_output_dirs()
+        # Check external dependencies
+        self._check_external_binaries()
     
     def _check_external_binaries(self):
         """Check for required external binaries and exit if missing."""
@@ -487,6 +501,7 @@ class BatchDockingPipeline:
                 default_size = self.config["box"]["default_size"]
                 box_params = (0.0, 0.0, 0.0, *default_size)
             # Run each enabled docking engine, fail early if any engine fails
+            engine_failures = []
             for engine in enabled_engines:
                 engine_start = time.time()
                 self.logger.info(f"[{ligand_name}] Running {engine.upper()} docking")
@@ -511,27 +526,57 @@ class BatchDockingPipeline:
                             str(prepared_ligand), 
                             str(ligand_output_dir)
                         )
-                    result['stages'][engine] = status['success']
+                    
                     result['timings'][engine] = time.time() - engine_start
+                    
                     if status['success']:
                         output_files_exist = self._validate_engine_output(engine, str(ligand_output_dir))
                         if not output_files_exist:
+                            error_msg = f"{engine.upper()} reported success but no output files found"
                             result['stages'][engine] = False
-                            result['errors'][engine] = f"{engine.upper()} reported success but no output files found"
-                            self.logger.error(f"[{ligand_name}] {engine.upper()} reported success but no output files found")
-                            return result  # Early exit
+                            result['errors'][engine] = error_msg
+                            engine_failures.append(f"{engine}: {error_msg}")
+                            self.logger.error(f"[{ligand_name}] {error_msg}")
                         else:
+                            result['stages'][engine] = True
                             self.logger.info(f"[{ligand_name}] {engine.upper()} completed successfully")
                     else:
-                        result['errors'][engine] = status.get('error', 'Unknown error')
-                        self.logger.error(f"[{ligand_name}] {engine.upper()} failed: {status.get('error')}")
-                        return result  # Early exit
+                        error_msg = status.get('error', 'Unknown error')
+                        result['stages'][engine] = False
+                        result['errors'][engine] = error_msg
+                        engine_failures.append(f"{engine}: {error_msg}")
+                        self.logger.error(f"[{ligand_name}] {engine.upper()} failed: {error_msg}")
+                        
                 except Exception as e:
+                    error_msg = str(e)
                     result['stages'][engine] = False
-                    result['errors'][engine] = str(e)
+                    result['errors'][engine] = error_msg
                     result['timings'][engine] = time.time() - engine_start
+                    engine_failures.append(f"{engine}: {error_msg}")
                     self.logger.error(f"[{ligand_name}] {engine.upper()} failed with exception: {e}")
-                    return result  # Early exit
+            
+            # Check if any engines failed and decide whether to continue
+            if engine_failures:
+                if self.config.get("strict_mode", True):  # Default to strict mode
+                    result['stages']['docking'] = False
+                    result['errors']['docking'] = f"One or more docking engines failed: {'; '.join(engine_failures)}"
+                    result['timings']['docking'] = time.time() - stage_start
+                    self.logger.error(f"[{ligand_name}] Docking failed due to engine failures: {'; '.join(engine_failures)}")
+                    return result  # Early exit in strict mode
+                else:
+                    # Non-strict mode: continue with successful engines only
+                    successful_engines = [eng for eng in enabled_engines if result['stages'].get(eng, False)]
+                    if not successful_engines:
+                        result['stages']['docking'] = False
+                        result['errors']['docking'] = f"All docking engines failed: {'; '.join(engine_failures)}"
+                        result['timings']['docking'] = time.time() - stage_start
+                        self.logger.error(f"[{ligand_name}] All docking engines failed: {'; '.join(engine_failures)}")
+                        return result  # Early exit if all engines failed
+                    else:
+                        result['stages']['docking'] = True
+                        self.logger.warning(f"[{ligand_name}] Some engines failed but continuing with successful ones: {successful_engines}")
+            else:
+                result['stages']['docking'] = True
             # Stage 3: Results parsing
             self.logger.info(f"[{ligand_name}] Stage 3: Parsing docking results")
             parsing_start = time.time()
@@ -644,21 +689,94 @@ class BatchDockingPipeline:
         print(f"\n{COLOR_INFO}{'='*80}{COLOR_RESET}")
         print(f"{COLOR_INFO}STARTING BATCH MOLECULAR DOCKING PIPELINE{COLOR_RESET}")
         print(f"{COLOR_INFO}{'='*80}{COLOR_RESET}")
+        
         try:
             ligands = self.discover_ligands(ligand_input)
             self.total_ligands = len(ligands)
             prepared_protein = self.prepare_protein_once(protein_file)
+            
+            # Initialize shared memory manager for parallel processing
             if parallel and self.config["parallel"]["max_workers"] > 1 and len(ligands) > 1:
+                self._shared_memory_manager = SharedMemoryManager()
+                self._shared_memory_manager.start()
+                
                 print(f"{COLOR_INFO}Processing {len(ligands)} ligands in parallel with {self.config['parallel']['max_workers']} workers{COLOR_RESET}")
+                
+                # Use thread-safe processing with proper resource management
                 with Pool(processes=self.config["parallel"]["max_workers"]) as pool:
-                    process_func = partial(self.process_single_ligand, prepared_protein=prepared_protein)
-                    results = pool.map(process_func, ligands)
+                    # Create a thread-safe wrapper for the processing function
+                    process_func = partial(self._process_single_ligand_safe, prepared_protein=prepared_protein)
+                    
+                    # Process ligands with proper error handling
+                    results = []
+                    for ligand_info in ligands:
+                        try:
+                            result = pool.apply_async(process_func, (ligand_info,))
+                            results.append(result)
+                        except Exception as e:
+                            self.logger.error(f"Failed to submit ligand {ligand_info[0]} for processing: {e}")
+                            results.append(None)
+                    
+                    # Collect results with timeout
+                    processed_results = []
+                    for i, result in enumerate(results):
+                        try:
+                            if result is not None:
+                                processed_result = result.get(timeout=3600)  # 1 hour timeout
+                                processed_results.append(processed_result)
+                                
+                                # Update statistics thread-safely
+                                ligand_name = ligands[i][0]
+                                success = processed_result.get('success', False)
+                                self._update_statistics(ligand_name, success, processed_result)
+                            else:
+                                # Handle failed submission
+                                ligand_name = ligands[i][0]
+                                failed_result = {
+                                    'ligand_name': ligand_name,
+                                    'success': False,
+                                    'errors': {'submission': 'Failed to submit for processing'},
+                                    'total_time': 0
+                                }
+                                processed_results.append(failed_result)
+                                self._update_statistics(ligand_name, False, failed_result)
+                                
+                        except Exception as e:
+                            self.logger.error(f"Failed to get result for ligand {ligands[i][0]}: {e}")
+                            failed_result = {
+                                'ligand_name': ligands[i][0],
+                                'success': False,
+                                'errors': {'processing': str(e)},
+                                'total_time': 0
+                            }
+                            processed_results.append(failed_result)
+                            self._update_statistics(ligands[i][0], False, failed_result)
+                
+                results = processed_results
             else:
                 print(f"{COLOR_INFO}Processing {len(ligands)} ligands serially{COLOR_RESET}")
                 results = []
                 for ligand_info in ligands:
-                    result = self.process_single_ligand(ligand_info, prepared_protein)
-                    results.append(result)
+                    try:
+                        result = self.process_single_ligand(ligand_info, prepared_protein)
+                        results.append(result)
+                        
+                        # Update statistics
+                        ligand_name = ligand_info[0]
+                        success = result.get('success', False)
+                        self._update_statistics(ligand_name, success, result)
+                        
+                    except Exception as e:
+                        self.logger.error(f"Failed to process ligand {ligand_info[0]}: {e}")
+                        failed_result = {
+                            'ligand_name': ligand_info[0],
+                            'success': False,
+                            'errors': {'processing': str(e)},
+                            'total_time': 0
+                        }
+                        results.append(failed_result)
+                        self._update_statistics(ligand_info[0], False, failed_result)
+            
             self.print_final_summary(results)
             return {
                 'success': True,
@@ -676,6 +794,33 @@ class BatchDockingPipeline:
                 'success': False,
                 'error': str(e),
                 'total_time': time.time() - pipeline_start
+            }
+        finally:
+            # Ensure cleanup happens
+            self._cleanup_resources()
+    
+    def _process_single_ligand_safe(self, ligand_info: Tuple[str, Path], prepared_protein: str) -> Dict[str, Any]:
+        """
+        Thread-safe wrapper for processing a single ligand.
+        
+        Args:
+            ligand_info: Tuple of (ligand_name, ligand_path)
+            prepared_protein: Path to prepared protein file
+            
+        Returns:
+            Processing result dictionary
+        """
+        try:
+            # Use process lock for shared resource access
+            with self._process_lock:
+                return self.process_single_ligand(ligand_info, prepared_protein)
+        except Exception as e:
+            self.logger.error(f"Error in thread-safe ligand processing: {e}")
+            return {
+                'ligand_name': ligand_info[0],
+                'success': False,
+                'errors': {'thread_safe': str(e)},
+                'total_time': 0
             }
     
     def _generate_final_summary(self) -> str:
@@ -716,6 +861,62 @@ class BatchDockingPipeline:
         else:
             self.logger.warning("No successful results to aggregate")
             return ""
+    
+    def _register_cleanup_handlers(self):
+        """Register cleanup handlers for graceful shutdown."""
+        if not self._cleanup_registered:
+            atexit.register(self._cleanup_resources)
+            signal.signal(signal.SIGINT, self._signal_handler)
+            signal.signal(signal.SIGTERM, self._signal_handler)
+            self._cleanup_registered = True
+    
+    def _signal_handler(self, signum, frame):
+        """Handle termination signals gracefully."""
+        self.logger.info(f"Received signal {signum}, cleaning up resources...")
+        self._cleanup_resources()
+        exit(1)
+    
+    def _cleanup_resources(self):
+        """Clean up shared resources and active processes."""
+        try:
+            with self._lock:
+                # Clean up shared memory manager
+                if self._shared_memory_manager:
+                    self._shared_memory_manager.shutdown()
+                    self._shared_memory_manager = None
+                
+                # Terminate active processes
+                for process in self._active_processes.copy():
+                    if process.is_alive():
+                        process.terminate()
+                        process.join(timeout=5)
+                        if process.is_alive():
+                            process.kill()
+                
+                self._active_processes.clear()
+                
+            self.logger.info("Resource cleanup completed")
+        except Exception as e:
+            self.logger.error(f"Error during cleanup: {e}")
+    
+    def _update_statistics(self, ligand_name: str, success: bool, result: dict):
+        """Thread-safe update of pipeline statistics."""
+        with self._lock:
+            if success:
+                self.successful_ligands += 1
+                self.ligand_results[ligand_name] = result
+            else:
+                self.failed_ligands.add(ligand_name)
+    
+    def _register_process(self, process):
+        """Register a process for cleanup tracking."""
+        with self._lock:
+            self._active_processes.add(process)
+    
+    def _unregister_process(self, process):
+        """Unregister a process from cleanup tracking."""
+        with self._lock:
+            self._active_processes.discard(process)
 
 
 def main():

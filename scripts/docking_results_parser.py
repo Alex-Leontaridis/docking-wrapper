@@ -170,17 +170,31 @@ class DockingResultsParser:
                 with open(confidence_file, 'r') as f:
                     lines = f.readlines()
                 
-                # Skip header line and parse confidence scores
-                for line in lines[1:]:  # Skip header
+                # Parse confidence scores, handling potential header lines
+                for line_num, line in enumerate(lines, 1):
                     line = line.strip()
-                    if line and ',' in line:
-                        try:
-                            parts = line.split(',')
-                            if len(parts) >= 2:
-                                confidence = float(parts[1])
-                                confidence_scores.append(confidence)
-                        except (ValueError, IndexError):
-                            continue
+                    if not line:  # Skip empty lines
+                        continue
+                    
+                    # Skip header lines (lines that don't contain a comma or don't have numeric values)
+                    if ',' not in line:
+                        self.logger.debug(f"Skipping potential header line {line_num}: {line}")
+                        continue
+                    
+                    try:
+                        parts = line.split(',')
+                        if len(parts) >= 2:
+                            # Try to parse the second part as a float (confidence score)
+                            confidence = float(parts[1].strip())
+                            confidence_scores.append(confidence)
+                            self.logger.debug(f"Parsed confidence score: {confidence} from line {line_num}")
+                        else:
+                            self.logger.warning(f"Skipping malformed line {line_num}: {line}")
+                    except (ValueError, IndexError) as e:
+                        self.logger.warning(f"Skipping line {line_num} (not a confidence score): {line} - {e}")
+                        continue
+            
+            self.logger.info(f"Parsed {len(confidence_scores)} confidence scores from {confidence_file}")
             
             # Look for SDF files with poses
             sdf_files = list(diffdock_dir.glob("*.sdf"))

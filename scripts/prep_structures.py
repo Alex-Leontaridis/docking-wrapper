@@ -7,15 +7,39 @@ import subprocess
 from rdkit import Chem
 from rdkit.Chem import AllChem
 import numpy as np
+import shutil
 
 # Add current directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import config
 
+# Import resource management utilities
 try:
-    from meeko import MoleculePreparation
-    MEEKO_AVAILABLE = True
+    from resource_manager import temp_file, temp_directory, register_temp_file, cleanup_all
+    RESOURCE_MANAGEMENT_AVAILABLE = True
 except ImportError:
+    RESOURCE_MANAGEMENT_AVAILABLE = False
+    logging.warning("Resource management utilities not available - using basic cleanup")
+
+try:
+    # Try to import meeko with proper error handling
+    try:
+        from meeko import MoleculePreparation
+        MEEKO_AVAILABLE = True
+        logging.info("Meeko successfully imported")
+    except ImportError as e:
+        if "rdkit.six" in str(e):
+            logging.warning("Meeko import failed due to rdkit.six module issue. This is a known compatibility problem.")
+            logging.warning("Falling back to RDKit-based ligand preparation.")
+            MEEKO_AVAILABLE = False
+        else:
+            logging.warning(f"Meeko import failed: {e}")
+            MEEKO_AVAILABLE = False
+    except Exception as e:
+        logging.warning(f"Unexpected error importing Meeko: {e}")
+        MEEKO_AVAILABLE = False
+except Exception as e:
+    logging.warning(f"Failed to check Meeko availability: {e}")
     MEEKO_AVAILABLE = False
 
 # Setup logging
@@ -69,69 +93,87 @@ def clean_pdbqt_formatting(pdbqt_file):
     - Remove problematic alternate conformations
     - Ensure proper coordinate formatting
     """
+    if RESOURCE_MANAGEMENT_AVAILABLE:
+        # Use resource management utilities
+        with temp_file(suffix='.pdbqt') as temp_file_path:
+            _clean_pdbqt_content(pdbqt_file, temp_file_path)
+            # Move cleaned file to original location
+            shutil.move(temp_file_path, pdbqt_file)
+            logging.info(f"Cleaned PDBQT formatting in {pdbqt_file}")
+    else:
+        # Fallback to original implementation
+        _clean_pdbqt_formatting_fallback(pdbqt_file)
+
+
+def _clean_pdbqt_content(input_file: str, output_file: str):
+    """Clean PDBQT content and write to output file."""
+    with open(input_file, 'r') as infile, open(output_file, 'w') as outfile:
+        for line_num, line in enumerate(infile, 1):
+            if line.startswith(('ATOM', 'HETATM')):
+                # Extract fields according to PDB/PDBQT format
+                record_type = line[0:6].strip()
+                atom_num = line[6:11].strip()
+                atom_name = line[12:16].strip()
+                alt_loc = line[16:17].strip()
+                res_name = line[17:20].strip()
+                chain_id = line[21:22].strip()
+                res_num = line[22:26].strip()
+                insert_code = line[26:27].strip()
+                
+                # Skip alternate conformations (A, B, etc.) except the first one
+                if alt_loc and alt_loc not in ['', ' ', 'A']:
+                    continue
+                
+                # Fix atom names that are too long
+                if len(atom_name) > 4:
+                    # Common fixes for hydrogen names
+                    if atom_name.startswith('HG1A'):
+                        atom_name = 'HG11'
+                    elif atom_name.startswith('HG1B'):
+                        atom_name = 'HG12'
+                    elif atom_name.startswith('HG2A'):
+                        atom_name = 'HG21'
+                    elif atom_name.startswith('HG2B'):
+                        atom_name = 'HG22'
+                    elif 'HD1' in atom_name:
+                        atom_name = 'HD1'
+                    elif 'HD2' in atom_name:
+                        atom_name = 'HD2'
+                    else:
+                        # Generic truncation
+                        atom_name = atom_name[:4]
+                
+                try:
+                    # Parse coordinates
+                    x = float(line[30:38])
+                    y = float(line[38:46])
+                    z = float(line[46:54])
+                    occupancy = line[54:60].strip()
+                    temp_factor = line[60:66].strip()
+                    charge = line[66:76].strip() if len(line) > 66 else ""
+                    element = line[76:78].strip() if len(line) > 76 else ""
+                    
+                    # Reconstruct the line with proper formatting
+                    new_line = f"{record_type:<6}{atom_num:>5} {atom_name:<4}{alt_loc:1}{res_name:>3} {chain_id:1}{res_num:>4}{insert_code:1}   {x:8.3f}{y:8.3f}{z:8.3f}{occupancy:>6}{temp_factor:>6}{charge:>10}{element:>2}\n"
+                    outfile.write(new_line)
+                    
+                except (ValueError, IndexError) as e:
+                    logging.warning(f"Skipping malformed line {line_num}: {line.strip()}")
+                    continue
+            else:
+                # Keep non-ATOM/HETATM lines as-is
+                outfile.write(line)
+
+
+def _clean_pdbqt_formatting_fallback(pdbqt_file):
+    """Fallback implementation for PDBQT cleaning without resource management."""
     import tempfile
     import shutil
     
     temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.pdbqt')
     
     try:
-        with open(pdbqt_file, 'r') as infile:
-            for line_num, line in enumerate(infile, 1):
-                if line.startswith(('ATOM', 'HETATM')):
-                    # Extract fields according to PDB/PDBQT format
-                    record_type = line[0:6].strip()
-                    atom_num = line[6:11].strip()
-                    atom_name = line[12:16].strip()
-                    alt_loc = line[16:17].strip()
-                    res_name = line[17:20].strip()
-                    chain_id = line[21:22].strip()
-                    res_num = line[22:26].strip()
-                    insert_code = line[26:27].strip()
-                    
-                    # Skip alternate conformations (A, B, etc.) except the first one
-                    if alt_loc and alt_loc not in ['', ' ', 'A']:
-                        continue
-                    
-                    # Fix atom names that are too long
-                    if len(atom_name) > 4:
-                        # Common fixes for hydrogen names
-                        if atom_name.startswith('HG1A'):
-                            atom_name = 'HG11'
-                        elif atom_name.startswith('HG1B'):
-                            atom_name = 'HG12'
-                        elif atom_name.startswith('HG2A'):
-                            atom_name = 'HG21'
-                        elif atom_name.startswith('HG2B'):
-                            atom_name = 'HG22'
-                        elif 'HD1' in atom_name:
-                            atom_name = 'HD1'
-                        elif 'HD2' in atom_name:
-                            atom_name = 'HD2'
-                        else:
-                            # Generic truncation
-                            atom_name = atom_name[:4]
-                    
-                    try:
-                        # Parse coordinates
-                        x = float(line[30:38])
-                        y = float(line[38:46])
-                        z = float(line[46:54])
-                        occupancy = line[54:60].strip()
-                        temp_factor = line[60:66].strip()
-                        charge = line[66:76].strip() if len(line) > 66 else ""
-                        element = line[76:78].strip() if len(line) > 76 else ""
-                        
-                        # Reconstruct the line with proper formatting
-                        new_line = f"{record_type:<6}{atom_num:>5} {atom_name:<4}{alt_loc:1}{res_name:>3} {chain_id:1}{res_num:>4}{insert_code:1}   {x:8.3f}{y:8.3f}{z:8.3f}{occupancy:>6}{temp_factor:>6}{charge:>10}{element:>2}\n"
-                        temp_file.write(new_line)
-                        
-                    except (ValueError, IndexError) as e:
-                        logging.warning(f"Skipping malformed line {line_num}: {line.strip()}")
-                        continue
-                else:
-                    # Keep non-ATOM/HETATM lines as-is
-                    temp_file.write(line)
-        
+        _clean_pdbqt_content(pdbqt_file, temp_file.name)
         temp_file.close()
         
         # Replace original file with cleaned version
