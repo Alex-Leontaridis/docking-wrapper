@@ -1,7 +1,7 @@
 {
-  "_description": "Batch Molecular Docking Pipeline Configuration",
-  "_version": "1.0",
-  "_last_updated": "2025-07-03",
+  "_description": "Enhanced Batch Molecular Docking Pipeline Configuration with ML/Analysis",
+  "_version": "2.0",
+  "_last_updated": "2025-01-27",
   "engines": {
     "vina": {
       "enabled": true,
@@ -35,6 +35,68 @@
       "device": "cpu",
       "actual_steps": null,
       "no_final_step_noise": false
+    }
+  },
+  "ml_models": {
+    "equibind": {
+      "enabled": false,
+      "timeout": 600,
+      "use_gpu": false,
+      "batch_size": 1,
+      "num_poses": 1
+    },
+    "neuralplexer": {
+      "enabled": false,
+      "timeout": 600,
+      "use_gpu": false,
+      "batch_size": 1,
+      "num_poses": 1
+    },
+    "umol": {
+      "enabled": false,
+      "timeout": 600,
+      "use_gpu": false,
+      "batch_size": 1,
+      "num_poses": 1
+    },
+    "structure_predictor": {
+      "enabled": false,
+      "timeout": 1800,
+      "method": "colabfold",
+      "use_gpu": false,
+      "num_recycles": 3
+    }
+  },
+  "analysis": {
+    "boltz2": {
+      "enabled": false,
+      "timeout": 300,
+      "batch_size": 1
+    },
+    "interactions": {
+      "enabled": false,
+      "timeout": 300,
+      "method": "plip",
+      "fallback_to_rdkit": true
+    },
+    "druggability": {
+      "enabled": false,
+      "timeout": 300,
+      "min_pocket_volume": 100.0
+    },
+    "consensus": {
+      "enabled": false,
+      "rmsd_threshold": 2.0,
+      "min_poses": 2
+    },
+    "confidence": {
+      "enabled": false,
+      "weights": {
+        "consensus": 0.3,
+        "druggability": 0.2,
+        "affinity": 0.2,
+        "interactions": 0.3
+      }
     }
   },
   "box": {

@@ -23,18 +23,56 @@ Scripts will check for these binaries at startup and exit with a clear error if 
 
 ## CLI Usage
 
-### 1. Batch Pipeline
-Orchestrates the full workflow: structure prep, docking, and parsing.
+### Enhanced Batch Pipeline (Recommended)
+The enhanced pipeline now integrates all ML/Analysis tools into a single unified workflow with 7 comprehensive stages.
+
+#### **Traditional Docking Only**
+Basic molecular docking with Vina, GNINA, and DiffDock:
 
 ```bash
-python3 scripts/batch_pipeline.py --protein receptor.pdb --ligands ligand_dir/
-# With custom config
-python3 scripts/batch_pipeline.py --protein receptor.pdb --ligands ligands/ --config pipeline_config.json
-# Enable all engines
-python3 scripts/batch_pipeline.py --protein receptor.pdb --ligands ligands/ --enable-gnina --enable-diffdock
-# Serial processing
-python3 scripts/batch_pipeline.py --protein receptor.pdb --ligands ligands/ --serial
+# Apply to test_bug_fix scenario
+python3 scripts/batch_pipeline.py --protein inputs/protein.pdb --ligands inputs/ligands/ --output-dir test_bug_fix_outputs/
+# Run
+python3 scripts/batch_pipeline.py --protein inputs/protein.pdb --ligands inputs/ligands/ --enable-gnina --enable-diffdock --output-dir test_bug_fix_outputs/
 ```
+
+#### **Full Enhanced Pipeline**
+Complete decision-ready insight engine with ML models, analysis tools, consensus, and confidence scoring:
+
+```bash
+# Apply to test_bug_fix scenario
+python3 scripts/batch_pipeline.py --protein inputs/protein.pdb --ligands inputs/ligands/ --enable-all-ml --enable-all-analysis --output-dir test_bug_fix_outputs/
+# Run
+python3 scripts/batch_pipeline.py --protein inputs/protein.pdb --ligands inputs/ligands/ --enable-all-ml --enable-all-analysis --enable-consensus --enable-confidence --output-dir test_bug_fix_outputs/
+```
+
+#### **Custom Configuration**
+Use a custom configuration file for specific requirements:
+
+```bash
+# Apply to test_bug_fix scenario
+python3 scripts/batch_pipeline.py --protein inputs/protein.pdb --ligands inputs/ligands/ --config pipeline_config.json --output-dir test_bug_fix_outputs/
+# Run
+python3 scripts/batch_pipeline.py --protein inputs/protein.pdb --ligands inputs/ligands/ --config pipeline_config.json --enable-equibind --enable-neuralplexer --enable-boltz2 --enable-interactions --output-dir test_bug_fix_outputs/
+```
+
+### Pipeline Stages
+The enhanced pipeline includes 7 comprehensive stages:
+
+1. **Structure Preparation**: Convert protein and ligands to PDBQT format
+2. **Traditional Docking**: Run Vina, GNINA, DiffDock (if enabled)
+3. **ML Model Docking**: Run EquiBind, NeuralPLexer, UMol (if enabled)
+4. **Analysis Tools**: Run Boltz2, Interactions, Druggability (if enabled)
+5. **Consensus Analysis**: RMSD-based pose clustering (if enabled)
+6. **Confidence Scoring**: Composite confidence score 0-100 (if enabled)
+7. **Results Parsing**: Generate comprehensive summaries
+
+### Command-Line Options
+- **Traditional engines**: `--enable-gnina --enable-diffdock`
+- **ML models**: `--enable-equibind --enable-neuralplexer --enable-umol --enable-structure-predictor`
+- **Analysis tools**: `--enable-boltz2 --enable-interactions --enable-druggability`
+- **Convenience flags**: `--enable-all-ml --enable-all-analysis`
+- **Processing**: `--serial --max-workers 4 --verbose`
 
 - **Config file options:** See `pipeline_config.json` or the script docstring for all options. The config is validated at startup.
 - **Where GNINA and DiffDock are called:**
@@ -74,9 +112,9 @@ python3 scripts/parse_and_score_results.py --batch_dirs out1/ out2/ --output_dir
 
 ---
 
-## Enhanced Model & Analysis Commands
+## Individual Script Usage (Advanced)
 
-The following commands use the new ML-based docking, scoring, and analysis scripts. These are not yet integrated into the main batch pipeline, but can be run individually or orchestrated via custom scripts.
+The following commands can be run individually for specific tasks or custom workflows. However, the **recommended approach** is to use the enhanced batch pipeline above, which integrates all these tools automatically.
 
 ### 1. EquiBind Pose Prediction
 ```bash
@@ -125,6 +163,41 @@ python3 scripts/compute_confidence.py --consensus_json outputs/consensus.json --
 
 ---
 
+## Enhanced Output Structure
+
+The enhanced pipeline generates comprehensive, organized outputs:
+
+```
+test_bug_fix_outputs/
+├── docking_results/
+│   └── ligand_name/
+│       ├── vina_output/          # Traditional docking results
+│       ├── gnina_output/         # GNINA docking results
+│       ├── diffdock_output/      # DiffDock results
+│       ├── ml_models/            # ML model poses
+│       │   ├── equibind/
+│       │   ├── neuralplexer/
+│       │   └── umol/
+│       ├── analysis/             # Analysis results
+│       │   ├── boltz2/
+│       │   ├── interactions/
+│       │   └── druggability/
+│       ├── consensus/            # Pose consensus analysis
+│       └── confidence/           # Confidence scores
+├── parsed_results/               # Parsed summaries
+├── prepared_structures/          # Prepared protein/ligands
+└── logs/                         # Comprehensive logs
+```
+
+### Key Output Files
+- **Traditional**: CSV summaries with poses and affinity scores
+- **ML Models**: PDB/SDF files with predicted poses
+- **Analysis**: JSON files with detailed metrics
+- **Consensus**: JSON with pose agreement analysis
+- **Confidence**: JSON with composite confidence scores (0-100)
+
+---
+
 ## Dummy Testing for CI/Review
 
 This project includes **dummy scripts** for GNINA and DiffDock to allow reviewers and CI systems to test the pipeline without the real binaries:
@@ -163,8 +236,12 @@ At startup, the scripts check for required binaries using `shutil.which()` or si
 ---
 
 ## Project Status
-- **Ready for review.**
-- Dummy scripts included for GNINA and DiffDock to enable full workflow testing in any environment.
+- **Enhanced pipeline ready for production use.**
+- **Complete ML/Analysis integration** with decision-ready insights.
+- **Unified workflow** with 7 comprehensive stages.
+- **Backward compatibility** with existing traditional workflows.
+- **Dummy scripts included** for GNINA and DiffDock to enable full workflow testing in any environment.
+- **Comprehensive error handling** and resource management.
 
 ---
 

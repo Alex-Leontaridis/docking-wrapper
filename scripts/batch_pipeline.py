@@ -2,7 +2,7 @@
 """
 Batch Molecular Docking Pipeline
 Task 4: Orchestrates structure preparation, docking, and results parsing across multiple ligands
-Supports AutoDock Vina, GNINA, and DiffDock with comprehensive logging and error handling
+Supports AutoDock Vina, GNINA, DiffDock, and enhanced ML models with comprehensive logging and error handling
 """
 
 import os
@@ -17,13 +17,13 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 import subprocess
 import shutil
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool, cpu_count, Manager, Lock
 from functools import partial
-import threading
-from multiprocessing import Lock as ProcessLock
-from multiprocessing.managers import SharedMemoryManager
 import atexit
 import signal
+import threading
+from multiprocessing.managers import SharedMemoryManager
+from multiprocessing import Lock as ProcessLock
 
 # Pretty output helpers
 try:
@@ -62,8 +62,24 @@ from run_docking_multi import (
     ensure_output_dirs as ensure_single_output_dirs
 )
 from docking_results_parser import DockingResultsParser
-from config import Config
+from config import DockingConfig
 from utils.logging import setup_logging, get_global_logger
+
+# Import enhanced ML/Analysis modules
+try:
+    from run_equibind import run_equibind_inference
+    from run_neuralplexer import run_neuralplexer_inference
+    from run_umol import run_umol_inference
+    from run_structure_predictor import run_structure_prediction
+    from run_boltz2 import run_boltz2_prediction
+    from extract_interactions import extract_interactions
+    from run_druggability import run_druggability_analysis
+    from model_consensus import run_consensus_analysis
+    from compute_confidence import compute_confidence_score
+    ML_MODULES_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Some ML modules not available: {e}")
+    ML_MODULES_AVAILABLE = False
 
 # --- Constants ---
 DEFAULT_CONFIG = {
@@ -71,6 +87,19 @@ DEFAULT_CONFIG = {
         "vina": {"enabled": True, "exhaustiveness": 8, "num_modes": 9},
         "gnina": {"enabled": False, "use_gpu": False, "cnn_scoring": "rescore"},
         "diffdock": {"enabled": False, "inference_steps": 20, "samples_per_complex": 10}
+    },
+    "ml_models": {
+        "equibind": {"enabled": False, "timeout": 600, "use_gpu": False},
+        "neuralplexer": {"enabled": False, "timeout": 600, "use_gpu": False},
+        "umol": {"enabled": False, "timeout": 600, "use_gpu": False},
+        "structure_predictor": {"enabled": False, "timeout": 1800, "method": "colabfold"}
+    },
+    "analysis": {
+        "boltz2": {"enabled": False, "timeout": 300},
+        "interactions": {"enabled": False, "timeout": 300, "method": "plip"},
+        "druggability": {"enabled": False, "timeout": 300},
+        "consensus": {"enabled": False, "rmsd_threshold": 2.0},
+        "confidence": {"enabled": False}
     },
     "box": {
         "auto_detect": True,
@@ -81,7 +110,9 @@ DEFAULT_CONFIG = {
         "preparation": 300,
         "vina": 1800,
         "gnina": 3600,
-        "diffdock": 7200
+        "diffdock": 7200,
+        "parsing": 300,
+        "overall_per_ligand": 10800
     },
     "parallel": {
         "max_workers": min(4, cpu_count()),
@@ -137,7 +168,7 @@ class BatchDockingPipeline:
             if shutil.which(binary) is None:
                 missing.append(binary)
         # Check for MGLTools (optional, but warn if missing)
-        self.config_obj = Config()
+        self.config_obj = DockingConfig()
         if not self.config_obj.validate_mgltools():
             print(f"{COLOR_WARN}Warning: MGLTools not found. Protein preparation may be limited.{COLOR_RESET}")
             print(f"To install MGLTools, visit: http://mgltools.scripps.edu/downloads/downloads/tools/downloads")
@@ -436,13 +467,16 @@ class BatchDockingPipeline:
             'success': False,
             'stages': {},
             'timings': {},
-            'errors': {}
+            'errors': {},
+            'ml_results': {},
+            'analysis_results': {}
         }
         stage_start = time.time()
         try:
             self.logger.info(f"Processing ligand: {ligand_name}")
             ligand_output_dir = self.output_dir / "docking_results" / ligand_name
             ligand_output_dir.mkdir(exist_ok=True)
+            
             # Stage 1: Ligand preparation
             self.logger.info(f"[{ligand_name}] Stage 1: Preparing ligand structure")
             stage_start = time.time()
@@ -452,6 +486,7 @@ class BatchDockingPipeline:
                 result['timings']['preparation'] = time.time() - stage_start
                 self.logger.error(f"[{ligand_name}] Ligand file not found: {ligand_path}")
                 return result  # Early exit
+                
             prepared_ligand_dir = self.output_dir / "prepared_structures"
             prepared_ligand = prepared_ligand_dir / f"{ligand_name}_prepared.pdbqt"
             try:
@@ -467,8 +502,10 @@ class BatchDockingPipeline:
                 result['timings']['preparation'] = time.time() - stage_start
                 self.logger.error(f"[{ligand_name}] Ligand preparation failed: {e}")
                 return result  # Early exit
+                
             ensure_single_output_dirs(str(ligand_output_dir))
-            # Stage 2: Docking with enabled engines
+            
+            # Stage 2: Traditional Docking with enabled engines
             enabled_engines = []
             if self.config["engines"]["vina"]["enabled"]:
                 enabled_engines.append("vina")
@@ -476,143 +513,351 @@ class BatchDockingPipeline:
                 enabled_engines.append("gnina")
             if self.config["engines"]["diffdock"]["enabled"]:
                 enabled_engines.append("diffdock")
-            if not enabled_engines:
+                
+            if not enabled_engines and not any(self.config["ml_models"].values()):
                 result['stages']['docking'] = False
-                result['errors']['docking'] = "No docking engines enabled in configuration"
+                result['errors']['docking'] = "No docking engines or ML models enabled in configuration"
                 result['timings']['docking'] = time.time() - stage_start
-                self.logger.error(f"[{ligand_name}] No docking engines enabled")
+                self.logger.error(f"[{ligand_name}] No docking engines or ML models enabled")
                 return result  # Early exit
+                
             if not os.path.exists(prepared_protein):
                 result['stages']['docking'] = False
                 result['errors']['docking'] = f"Prepared protein file not found: {prepared_protein}"
                 result['timings']['docking'] = time.time() - stage_start
                 self.logger.error(f"[{ligand_name}] Prepared protein file not found: {prepared_protein}")
                 return result  # Early exit
-            self.logger.info(f"[{ligand_name}] Stage 2: Running docking with engines: {enabled_engines}")
-            if self.config["box"]["auto_detect"]:
-                try:
-                    box_params = extract_box_from_protein(prepared_protein)
-                    self.logger.info(f"[{ligand_name}] Auto-detected box parameters: {box_params}")
-                except Exception as e:
-                    self.logger.warning(f"[{ligand_name}] Box auto-detection failed: {e}, using defaults")
+                
+            # Run traditional docking engines if enabled
+            if enabled_engines:
+                self.logger.info(f"[{ligand_name}] Stage 2: Running traditional docking with engines: {enabled_engines}")
+                if self.config["box"]["auto_detect"]:
+                    try:
+                        box_params = extract_box_from_protein(prepared_protein)
+                        self.logger.info(f"[{ligand_name}] Auto-detected box parameters: {box_params}")
+                    except Exception as e:
+                        self.logger.warning(f"[{ligand_name}] Box auto-detection failed: {e}, using defaults")
+                        default_size = self.config["box"]["default_size"]
+                        box_params = (0.0, 0.0, 0.0, *default_size)
+                else:
                     default_size = self.config["box"]["default_size"]
                     box_params = (0.0, 0.0, 0.0, *default_size)
-            else:
-                default_size = self.config["box"]["default_size"]
-                box_params = (0.0, 0.0, 0.0, *default_size)
-            # Run each enabled docking engine, fail early if any engine fails
-            engine_failures = []
-            for engine in enabled_engines:
-                engine_start = time.time()
-                self.logger.info(f"[{ligand_name}] Running {engine.upper()} docking")
-                try:
-                    if engine == "vina":
-                        status = run_vina(
-                            prepared_protein, 
-                            str(prepared_ligand), 
-                            str(ligand_output_dir), 
-                            box_params
-                        )
-                    elif engine == "gnina":
-                        status = run_gnina(
-                            prepared_protein, 
-                            str(prepared_ligand), 
-                            str(ligand_output_dir),
-                            self.config["engines"]["gnina"]["use_gpu"]
-                        )
-                    elif engine == "diffdock":
-                        status = run_diffdock(
-                            prepared_protein, 
-                            str(prepared_ligand), 
-                            str(ligand_output_dir)
-                        )
                     
-                    result['timings'][engine] = time.time() - engine_start
-                    
-                    if status['success']:
-                        output_files_exist = self._validate_engine_output(engine, str(ligand_output_dir))
-                        if not output_files_exist:
-                            error_msg = f"{engine.upper()} reported success but no output files found"
+                # Run each enabled docking engine
+                engine_failures = []
+                for engine in enabled_engines:
+                    engine_start = time.time()
+                    self.logger.info(f"[{ligand_name}] Running {engine.upper()} docking")
+                    try:
+                        if engine == "vina":
+                            status = run_vina(
+                                prepared_protein, 
+                                str(prepared_ligand), 
+                                str(ligand_output_dir), 
+                                box_params
+                            )
+                        elif engine == "gnina":
+                            status = run_gnina(
+                                prepared_protein, 
+                                str(prepared_ligand), 
+                                str(ligand_output_dir),
+                                self.config["engines"]["gnina"]["use_gpu"]
+                            )
+                        elif engine == "diffdock":
+                            status = run_diffdock(
+                                prepared_protein, 
+                                str(prepared_ligand), 
+                                str(ligand_output_dir)
+                            )
+                        
+                        result['timings'][engine] = time.time() - engine_start
+                        
+                        if status['success']:
+                            output_files_exist = self._validate_engine_output(engine, str(ligand_output_dir))
+                            if not output_files_exist:
+                                error_msg = f"{engine.upper()} reported success but no output files found"
+                                result['stages'][engine] = False
+                                result['errors'][engine] = error_msg
+                                engine_failures.append(f"{engine}: {error_msg}")
+                                self.logger.error(f"[{ligand_name}] {error_msg}")
+                            else:
+                                result['stages'][engine] = True
+                                self.logger.info(f"[{ligand_name}] {engine.upper()} completed successfully")
+                        else:
+                            error_msg = status.get('error', 'Unknown error')
                             result['stages'][engine] = False
                             result['errors'][engine] = error_msg
                             engine_failures.append(f"{engine}: {error_msg}")
-                            self.logger.error(f"[{ligand_name}] {error_msg}")
-                        else:
-                            result['stages'][engine] = True
-                            self.logger.info(f"[{ligand_name}] {engine.upper()} completed successfully")
-                    else:
-                        error_msg = status.get('error', 'Unknown error')
+                            self.logger.error(f"[{ligand_name}] {engine.upper()} failed: {error_msg}")
+                            
+                    except Exception as e:
+                        error_msg = str(e)
                         result['stages'][engine] = False
                         result['errors'][engine] = error_msg
+                        result['timings'][engine] = time.time() - engine_start
                         engine_failures.append(f"{engine}: {error_msg}")
-                        self.logger.error(f"[{ligand_name}] {engine.upper()} failed: {error_msg}")
+                        self.logger.error(f"[{ligand_name}] {engine.upper()} failed with exception: {e}")
+                
+                # Check if any engines failed and decide whether to continue
+                if engine_failures:
+                    if self.config.get("strict_mode", True):  # Default to strict mode
+                        result['stages']['docking'] = False
+                        result['errors']['docking'] = f"One or more docking engines failed: {'; '.join(engine_failures)}"
+                        result['timings']['docking'] = time.time() - stage_start
+                        self.logger.error(f"[{ligand_name}] Docking failed due to engine failures: {'; '.join(engine_failures)}")
+                        return result  # Early exit in strict mode
+                    else:
+                        # Non-strict mode: continue with successful engines only
+                        successful_engines = [eng for eng in enabled_engines if result['stages'].get(eng, False)]
+                        if not successful_engines:
+                            result['stages']['docking'] = False
+                            result['errors']['docking'] = f"All docking engines failed: {'; '.join(engine_failures)}"
+                            result['timings']['docking'] = time.time() - stage_start
+                            self.logger.error(f"[{ligand_name}] All docking engines failed: {'; '.join(engine_failures)}")
+                            return result  # Early exit if all engines failed
+                        else:
+                            result['stages']['docking'] = True
+                            self.logger.warning(f"[{ligand_name}] Some engines failed but continuing with successful ones: {successful_engines}")
+                else:
+                    result['stages']['docking'] = True
+            else:
+                result['stages']['docking'] = True  # Skip traditional docking if no engines enabled
+            
+            # Stage 3: ML Model Docking (if enabled and available)
+            if ML_MODULES_AVAILABLE and any(self.config["ml_models"].values()):
+                self.logger.info(f"[{ligand_name}] Stage 3: Running ML model docking")
+                ml_start = time.time()
+                
+                # Create ML output directory
+                ml_output_dir = ligand_output_dir / "ml_models"
+                ml_output_dir.mkdir(exist_ok=True)
+                
+                # Run enabled ML models
+                ml_poses = []
+                for model_name, model_config in self.config["ml_models"].items():
+                    if not model_config.get("enabled", False):
+                        continue
+                        
+                    model_start = time.time()
+                    self.logger.info(f"[{ligand_name}] Running {model_name.upper()} ML docking")
+                    
+                    try:
+                        model_output_dir = ml_output_dir / model_name
+                        model_output_dir.mkdir(exist_ok=True)
+                        
+                        if model_name == "equibind":
+                            success, output_file = run_equibind_inference(
+                                prepared_protein, str(ligand_path), str(model_output_dir)
+                            )
+                        elif model_name == "neuralplexer":
+                            success, output_file = run_neuralplexer_inference(
+                                prepared_protein, str(ligand_path), str(model_output_dir)
+                            )
+                        elif model_name == "umol":
+                            success, output_file = run_umol_inference(
+                                prepared_protein, str(ligand_path), str(model_output_dir)
+                            )
+                        elif model_name == "structure_predictor":
+                            success, output_file = run_structure_prediction(
+                                prepared_protein, str(model_output_dir)
+                            )
+                        else:
+                            continue
+                            
+                        result['timings'][f"ml_{model_name}"] = time.time() - model_start
+                        
+                        if success and output_file:
+                            result['stages'][f"ml_{model_name}"] = True
+                            result['ml_results'][model_name] = output_file
+                            ml_poses.append(output_file)
+                            self.logger.info(f"[{ligand_name}] {model_name.upper()} completed successfully")
+                        else:
+                            result['stages'][f"ml_{model_name}"] = False
+                            result['errors'][f"ml_{model_name}"] = f"{model_name} failed to produce output"
+                            self.logger.warning(f"[{ligand_name}] {model_name.upper()} failed")
+                            
+                    except Exception as e:
+                        result['stages'][f"ml_{model_name}"] = False
+                        result['errors'][f"ml_{model_name}"] = str(e)
+                        result['timings'][f"ml_{model_name}"] = time.time() - model_start
+                        self.logger.error(f"[{ligand_name}] {model_name.upper()} failed with exception: {e}")
+                
+                result['timings']['ml_docking'] = time.time() - ml_start
+                result['ml_poses'] = ml_poses
+            
+            # Stage 4: Analysis (if enabled and available)
+            if ML_MODULES_AVAILABLE and any(self.config["analysis"].values()):
+                self.logger.info(f"[{ligand_name}] Stage 4: Running analysis tools")
+                analysis_start = time.time()
+                
+                # Create analysis output directory
+                analysis_output_dir = ligand_output_dir / "analysis"
+                analysis_output_dir.mkdir(exist_ok=True)
+                
+                # Run enabled analysis tools
+                for analysis_name, analysis_config in self.config["analysis"].items():
+                    if not analysis_config.get("enabled", False):
+                        continue
+                        
+                    analysis_tool_start = time.time()
+                    self.logger.info(f"[{ligand_name}] Running {analysis_name.upper()} analysis")
+                    
+                    try:
+                        tool_output_dir = analysis_output_dir / analysis_name
+                        tool_output_dir.mkdir(exist_ok=True)
+                        
+                        if analysis_name == "boltz2":
+                            success, output_file = run_boltz2_prediction(
+                                prepared_protein, str(ligand_path), str(tool_output_dir)
+                            )
+                        elif analysis_name == "interactions":
+                            # Use best pose for interaction analysis
+                            best_pose = self._get_best_pose(ligand_output_dir, ml_poses)
+                            if best_pose:
+                                success, output_file = extract_interactions(
+                                    best_pose, ligand_name, "PROT", str(tool_output_dir)
+                                )
+                            else:
+                                success, output_file = False, None
+                        elif analysis_name == "druggability":
+                            # Use protein for druggability analysis
+                            success, output_file = run_druggability_analysis(
+                                prepared_protein, str(tool_output_dir)
+                            )
+                        else:
+                            continue
+                            
+                        result['timings'][f"analysis_{analysis_name}"] = time.time() - analysis_tool_start
+                        
+                        if success and output_file:
+                            result['stages'][f"analysis_{analysis_name}"] = True
+                            result['analysis_results'][analysis_name] = output_file
+                            self.logger.info(f"[{ligand_name}] {analysis_name.upper()} completed successfully")
+                        else:
+                            result['stages'][f"analysis_{analysis_name}"] = False
+                            result['errors'][f"analysis_{analysis_name}"] = f"{analysis_name} failed to produce output"
+                            self.logger.warning(f"[{ligand_name}] {analysis_name.upper()} failed")
+                            
+                    except Exception as e:
+                        result['stages'][f"analysis_{analysis_name}"] = False
+                        result['errors'][f"analysis_{analysis_name}"] = str(e)
+                        result['timings'][f"analysis_{analysis_name}"] = time.time() - analysis_tool_start
+                        self.logger.error(f"[{ligand_name}] {analysis_name.upper()} failed with exception: {e}")
+                
+                result['timings']['analysis'] = time.time() - analysis_start
+            
+            # Stage 5: Consensus Analysis (if enabled and poses available)
+            if (ML_MODULES_AVAILABLE and 
+                self.config["analysis"]["consensus"]["enabled"] and 
+                len(result.get('ml_poses', [])) > 1):
+                
+                self.logger.info(f"[{ligand_name}] Stage 5: Running consensus analysis")
+                consensus_start = time.time()
+                
+                try:
+                    consensus_output_dir = ligand_output_dir / "consensus"
+                    consensus_output_dir.mkdir(exist_ok=True)
+                    
+                    consensus_file = consensus_output_dir / f"{ligand_name}_consensus.json"
+                    success, output_file = run_consensus_analysis(
+                        result['ml_poses'], str(consensus_file), ligand_name
+                    )
+                    
+                    result['timings']['consensus'] = time.time() - consensus_start
+                    
+                    if success and output_file:
+                        result['stages']['consensus'] = True
+                        result['consensus_file'] = output_file
+                        self.logger.info(f"[{ligand_name}] Consensus analysis completed successfully")
+                    else:
+                        result['stages']['consensus'] = False
+                        result['errors']['consensus'] = "Consensus analysis failed"
+                        self.logger.warning(f"[{ligand_name}] Consensus analysis failed")
                         
                 except Exception as e:
-                    error_msg = str(e)
-                    result['stages'][engine] = False
-                    result['errors'][engine] = error_msg
-                    result['timings'][engine] = time.time() - engine_start
-                    engine_failures.append(f"{engine}: {error_msg}")
-                    self.logger.error(f"[{ligand_name}] {engine.upper()} failed with exception: {e}")
+                    result['stages']['consensus'] = False
+                    result['errors']['consensus'] = str(e)
+                    result['timings']['consensus'] = time.time() - consensus_start
+                    self.logger.error(f"[{ligand_name}] Consensus analysis failed with exception: {e}")
             
-            # Check if any engines failed and decide whether to continue
-            if engine_failures:
-                if self.config.get("strict_mode", True):  # Default to strict mode
-                    result['stages']['docking'] = False
-                    result['errors']['docking'] = f"One or more docking engines failed: {'; '.join(engine_failures)}"
-                    result['timings']['docking'] = time.time() - stage_start
-                    self.logger.error(f"[{ligand_name}] Docking failed due to engine failures: {'; '.join(engine_failures)}")
-                    return result  # Early exit in strict mode
-                else:
-                    # Non-strict mode: continue with successful engines only
-                    successful_engines = [eng for eng in enabled_engines if result['stages'].get(eng, False)]
-                    if not successful_engines:
-                        result['stages']['docking'] = False
-                        result['errors']['docking'] = f"All docking engines failed: {'; '.join(engine_failures)}"
-                        result['timings']['docking'] = time.time() - stage_start
-                        self.logger.error(f"[{ligand_name}] All docking engines failed: {'; '.join(engine_failures)}")
-                        return result  # Early exit if all engines failed
+            # Stage 6: Confidence Scoring (if enabled)
+            if (ML_MODULES_AVAILABLE and 
+                self.config["analysis"]["confidence"]["enabled"] and
+                result.get('consensus_file') and
+                result.get('analysis_results')):
+                
+                self.logger.info(f"[{ligand_name}] Stage 6: Computing confidence score")
+                confidence_start = time.time()
+                
+                try:
+                    confidence_output_dir = ligand_output_dir / "confidence"
+                    confidence_output_dir.mkdir(exist_ok=True)
+                    
+                    confidence_file = confidence_output_dir / f"{ligand_name}_confidence.json"
+                    success, output_file = compute_confidence_score(
+                        result['consensus_file'],
+                        result['analysis_results'].get('druggability'),
+                        result['analysis_results'].get('boltz2'),
+                        result['analysis_results'].get('interactions'),
+                        str(confidence_file),
+                        ligand_name
+                    )
+                    
+                    result['timings']['confidence'] = time.time() - confidence_start
+                    
+                    if success and output_file:
+                        result['stages']['confidence'] = True
+                        result['confidence_file'] = output_file
+                        self.logger.info(f"[{ligand_name}] Confidence scoring completed successfully")
                     else:
-                        result['stages']['docking'] = True
-                        self.logger.warning(f"[{ligand_name}] Some engines failed but continuing with successful ones: {successful_engines}")
-            else:
-                result['stages']['docking'] = True
-            # Stage 3: Results parsing
-            self.logger.info(f"[{ligand_name}] Stage 3: Parsing docking results")
-            parsing_start = time.time()
-            try:
-                parser_output_dir = self.output_dir / "parsed_results" / ligand_name
-                parser_output_dir.mkdir(parents=True, exist_ok=True)
-                parser = DockingResultsParser(
-                    base_dir=str(ligand_output_dir),
-                    output_dir=str(parser_output_dir)
-                )
-                summary_df = parser.generate_summary(ligand_name=ligand_name)
-                if not summary_df.empty:
-                    ligand_results_dir = self.output_dir / "parsed_results" / ligand_name
-                    ligand_results_dir.mkdir(exist_ok=True)
-                    summary_file = ligand_results_dir / f"{ligand_name}_summary.csv"
-                    summary_df.to_csv(summary_file, index=False)
-                    if parser.failed_runs:
-                        failed_file = ligand_results_dir / f"{ligand_name}_failed.json"
-                        with open(failed_file, 'w') as f:
-                            json.dump(parser.failed_runs, f, indent=2)
-                    result['stages']['parsing'] = True
-                    result['summary_file'] = str(summary_file)
-                    result['poses_found'] = len(summary_df)
-                    self.logger.info(f"[{ligand_name}] Parsing completed, found {len(summary_df)} poses")
-                else:
+                        result['stages']['confidence'] = False
+                        result['errors']['confidence'] = "Confidence scoring failed"
+                        self.logger.warning(f"[{ligand_name}] Confidence scoring failed")
+                        
+                except Exception as e:
+                    result['stages']['confidence'] = False
+                    result['errors']['confidence'] = str(e)
+                    result['timings']['confidence'] = time.time() - confidence_start
+                    self.logger.error(f"[{ligand_name}] Confidence scoring failed with exception: {e}")
+            
+            # Stage 7: Results parsing (traditional engines)
+            if enabled_engines:
+                self.logger.info(f"[{ligand_name}] Stage 7: Parsing traditional docking results")
+                parsing_start = time.time()
+                try:
+                    parser_output_dir = self.output_dir / "parsed_results" / ligand_name
+                    parser_output_dir.mkdir(parents=True, exist_ok=True)
+                    parser = DockingResultsParser(
+                        base_dir=str(ligand_output_dir),
+                        output_dir=str(parser_output_dir)
+                    )
+                    summary_df = parser.generate_summary(ligand_name=ligand_name)
+                    if not summary_df.empty:
+                        ligand_results_dir = self.output_dir / "parsed_results" / ligand_name
+                        ligand_results_dir.mkdir(exist_ok=True)
+                        summary_file = ligand_results_dir / f"{ligand_name}_summary.csv"
+                        summary_df.to_csv(summary_file, index=False)
+                        if parser.failed_runs:
+                            failed_file = ligand_results_dir / f"{ligand_name}_failed.json"
+                            with open(failed_file, 'w') as f:
+                                json.dump(parser.failed_runs, f, indent=2)
+                        result['stages']['parsing'] = True
+                        result['summary_file'] = str(summary_file)
+                        result['poses_found'] = len(summary_df)
+                        self.logger.info(f"[{ligand_name}] Parsing completed, found {len(summary_df)} poses")
+                    else:
+                        result['stages']['parsing'] = False
+                        result['errors']['parsing'] = "No poses found in results"
+                        self.logger.warning(f"[{ligand_name}] Parsing completed but no poses found")
+                        return result  # Early exit
+                    result['timings']['parsing'] = time.time() - parsing_start
+                except Exception as e:
                     result['stages']['parsing'] = False
-                    result['errors']['parsing'] = "No poses found in results"
-                    self.logger.warning(f"[{ligand_name}] Parsing completed but no poses found")
+                    result['errors']['parsing'] = str(e)
+                    result['timings']['parsing'] = time.time() - parsing_start
+                    self.logger.error(f"[{ligand_name}] Results parsing failed: {e}")
                     return result  # Early exit
-                result['timings']['parsing'] = time.time() - parsing_start
-            except Exception as e:
-                result['stages']['parsing'] = False
-                result['errors']['parsing'] = str(e)
-                result['timings']['parsing'] = time.time() - parsing_start
-                self.logger.error(f"[{ligand_name}] Results parsing failed: {e}")
-                return result  # Early exit
+            
             # If we reach here, all steps succeeded
             result['success'] = True
             result['total_time'] = time.time() - stage_start
@@ -649,26 +894,121 @@ class BatchDockingPipeline:
             # Unknown engine, assume success if directory exists and has files
             return len(list(output_path.glob("*"))) > 0
     
+    def _get_best_pose(self, ligand_output_dir: Path, ml_poses: List[str]) -> Optional[str]:
+        """Get the best pose for analysis, prioritizing ML poses over traditional docking."""
+        # First try to get the best ML pose
+        if ml_poses:
+            # For now, return the first ML pose (could be enhanced with scoring)
+            return ml_poses[0]
+        
+        # Fallback to traditional docking poses
+        vina_out = ligand_output_dir / "vina_output" / "vina_out.pdbqt"
+        if vina_out.exists():
+            return str(vina_out)
+        
+        gnina_out = ligand_output_dir / "gnina_output"
+        if gnina_out.exists():
+            gnina_files = list(gnina_out.glob("*.pdbqt")) + list(gnina_out.glob("*.sdf"))
+            if gnina_files:
+                return str(gnina_files[0])
+        
+        diffdock_out = ligand_output_dir / "diffdock_output"
+        if diffdock_out.exists():
+            diffdock_files = list(diffdock_out.glob("*.sdf"))
+            if diffdock_files:
+                return str(diffdock_files[0])
+        
+        return None
+    
     def print_final_summary(self, results: List[Dict]):
-        print(f"\n{COLOR_INFO}{'='*60}{COLOR_RESET}")
-        print(f"{COLOR_INFO}BATCH PIPELINE SUMMARY{COLOR_RESET}")
-        print(f"{COLOR_INFO}{'='*60}{COLOR_RESET}")
-        headers = ["Ligand", "Status", "Prep", "Vina", "GNINA", "DiffDock", "Parse", "Time (s)", "Error"]
+        print(f"\n{COLOR_INFO}{'='*80}{COLOR_RESET}")
+        print(f"{COLOR_INFO}ENHANCED BATCH PIPELINE SUMMARY{COLOR_RESET}")
+        print(f"{COLOR_INFO}{'='*80}{COLOR_RESET}")
+        
+        # Determine which columns to show based on what was actually run
+        all_stages = set()
+        for r in results:
+            all_stages.update(r.get('stages', {}).keys())
+        
+        # Build headers dynamically
+        headers = ["Ligand", "Status", "Prep"]
+        
+        # Traditional docking engines
+        if any(stage in all_stages for stage in ['vina', 'gnina', 'diffdock']):
+            headers.extend(["Vina", "GNINA", "DiffDock"])
+        
+        # ML models
+        ml_models = ['ml_equibind', 'ml_neuralplexer', 'ml_umol', 'ml_structure_predictor']
+        if any(stage in all_stages for stage in ml_models):
+            headers.extend(["EquiBind", "NeuralPLexer", "UMol", "StructPred"])
+        
+        # Analysis tools
+        analysis_tools = ['analysis_boltz2', 'analysis_interactions', 'analysis_druggability']
+        if any(stage in all_stages for stage in analysis_tools):
+            headers.extend(["Boltz2", "Interactions", "Druggability"])
+        
+        # Consensus and confidence
+        if 'consensus' in all_stages:
+            headers.append("Consensus")
+        if 'confidence' in all_stages:
+            headers.append("Confidence")
+        
+        # Traditional parsing
+        if 'parsing' in all_stages:
+            headers.append("Parse")
+        
+        headers.extend(["Time (s)", "Error"])
+        
         table = []
         for r in results:
             stages = r.get('stages', {})
             row = [
                 r.get('ligand_name', ''),
                 pretty_status(r.get('success', False)),
-                pretty_status(stages.get('preparation', False)),
-                pretty_status(stages.get('vina', False)) if 'vina' in stages else '-',
-                pretty_status(stages.get('gnina', False)) if 'gnina' in stages else '-',
-                pretty_status(stages.get('diffdock', False)) if 'diffdock' in stages else '-',
-                pretty_status(stages.get('parsing', False)),
+                pretty_status(stages.get('preparation', False))
+            ]
+            
+            # Traditional docking engines
+            if any(stage in all_stages for stage in ['vina', 'gnina', 'diffdock']):
+                row.extend([
+                    pretty_status(stages.get('vina', False)) if 'vina' in stages else '-',
+                    pretty_status(stages.get('gnina', False)) if 'gnina' in stages else '-',
+                    pretty_status(stages.get('diffdock', False)) if 'diffdock' in stages else '-'
+                ])
+            
+            # ML models
+            if any(stage in all_stages for stage in ml_models):
+                row.extend([
+                    pretty_status(stages.get('ml_equibind', False)) if 'ml_equibind' in stages else '-',
+                    pretty_status(stages.get('ml_neuralplexer', False)) if 'ml_neuralplexer' in stages else '-',
+                    pretty_status(stages.get('ml_umol', False)) if 'ml_umol' in stages else '-',
+                    pretty_status(stages.get('ml_structure_predictor', False)) if 'ml_structure_predictor' in stages else '-'
+                ])
+            
+            # Analysis tools
+            if any(stage in all_stages for stage in analysis_tools):
+                row.extend([
+                    pretty_status(stages.get('analysis_boltz2', False)) if 'analysis_boltz2' in stages else '-',
+                    pretty_status(stages.get('analysis_interactions', False)) if 'analysis_interactions' in stages else '-',
+                    pretty_status(stages.get('analysis_druggability', False)) if 'analysis_druggability' in stages else '-'
+                ])
+            
+            # Consensus and confidence
+            if 'consensus' in all_stages:
+                row.append(pretty_status(stages.get('consensus', False)) if 'consensus' in stages else '-')
+            if 'confidence' in all_stages:
+                row.append(pretty_status(stages.get('confidence', False)) if 'confidence' in stages else '-')
+            
+            # Traditional parsing
+            if 'parsing' in all_stages:
+                row.append(pretty_status(stages.get('parsing', False)) if 'parsing' in stages else '-')
+            
+            row.extend([
                 f"{r.get('total_time', 0):.1f}",
                 (next(iter(r.get('errors', {}).values()), '')[:40] if r.get('errors') else '')
-            ]
+            ])
             table.append(row)
+        
         if HAVE_TABULATE:
             try:
                 print(tabulate(table, headers=headers, tablefmt="fancy_grid"))
@@ -682,7 +1022,19 @@ class BatchDockingPipeline:
             print(fmt.format(*headers))
             for row in table:
                 print(fmt.format(*row))
-        print(f"{COLOR_INFO}{'='*60}{COLOR_RESET}\n")
+        
+        # Print ML/Analysis summary if any were run
+        ml_results = [r for r in results if r.get('ml_results') or r.get('analysis_results')]
+        if ml_results:
+            print(f"\n{COLOR_INFO}ML/Analysis Results Summary:{COLOR_RESET}")
+            for r in ml_results:
+                ligand_name = r.get('ligand_name', '')
+                ml_count = len(r.get('ml_results', {}))
+                analysis_count = len(r.get('analysis_results', {}))
+                if ml_count > 0 or analysis_count > 0:
+                    print(f"  {ligand_name}: {ml_count} ML poses, {analysis_count} analysis results")
+        
+        print(f"{COLOR_INFO}{'='*80}{COLOR_RESET}\n")
     
     def run_batch_pipeline(self, protein_file: str, ligand_input: str, parallel: bool = True) -> Dict[str, Any]:
         pipeline_start = time.time()
@@ -922,18 +1274,27 @@ class BatchDockingPipeline:
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
-        description="Batch Molecular Docking Pipeline",
+        description="Enhanced Batch Molecular Docking Pipeline with ML/Analysis",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Single protein, directory of ligands
+  # Traditional docking only
   python3 batch_pipeline.py --protein receptor.pdb --ligands ligand_dir/
   
   # With custom config
   python3 batch_pipeline.py --protein receptor.pdb --ligands ligands/ --config pipeline_config.json
   
-  # Enable all engines
+  # Enable traditional engines
   python3 batch_pipeline.py --protein receptor.pdb --ligands ligands/ --enable-gnina --enable-diffdock
+  
+  # Enable ML models
+  python3 batch_pipeline.py --protein receptor.pdb --ligands ligands/ --enable-equibind --enable-neuralplexer
+  
+  # Enable analysis tools
+  python3 batch_pipeline.py --protein receptor.pdb --ligands ligands/ --enable-analysis --enable-consensus
+  
+  # Full enhanced pipeline
+  python3 batch_pipeline.py --protein receptor.pdb --ligands ligands/ --enable-all-ml --enable-all-analysis
   
   # Serial processing
   python3 batch_pipeline.py --protein receptor.pdb --ligands ligands/ --serial
@@ -951,10 +1312,42 @@ Examples:
                        help='Path to pipeline configuration JSON file')
     parser.add_argument('--output-dir', default='outputs',
                        help='Output directory (default: outputs)')
+    
+    # Traditional docking engines
     parser.add_argument('--enable-gnina', action='store_true',
                        help='Enable GNINA docking')
     parser.add_argument('--enable-diffdock', action='store_true',
                        help='Enable DiffDock docking')
+    
+    # ML models
+    parser.add_argument('--enable-equibind', action='store_true',
+                       help='Enable EquiBind ML pose prediction')
+    parser.add_argument('--enable-neuralplexer', action='store_true',
+                       help='Enable NeuralPLexer ML pose prediction')
+    parser.add_argument('--enable-umol', action='store_true',
+                       help='Enable UMol structure-free pose prediction')
+    parser.add_argument('--enable-structure-predictor', action='store_true',
+                       help='Enable protein structure prediction')
+    parser.add_argument('--enable-all-ml', action='store_true',
+                       help='Enable all ML models')
+    
+    # Analysis tools
+    parser.add_argument('--enable-boltz2', action='store_true',
+                       help='Enable Boltz2 binding affinity prediction')
+    parser.add_argument('--enable-interactions', action='store_true',
+                       help='Enable protein-ligand interaction analysis')
+    parser.add_argument('--enable-druggability', action='store_true',
+                       help='Enable binding site druggability analysis')
+    parser.add_argument('--enable-all-analysis', action='store_true',
+                       help='Enable all analysis tools')
+    
+    # Consensus and confidence
+    parser.add_argument('--enable-consensus', action='store_true',
+                       help='Enable pose consensus analysis')
+    parser.add_argument('--enable-confidence', action='store_true',
+                       help='Enable confidence scoring')
+    
+    # Processing options
     parser.add_argument('--serial', action='store_true',
                        help='Process ligands serially instead of in parallel')
     parser.add_argument('--max-workers', type=int,
@@ -971,10 +1364,37 @@ Examples:
     )
     
     # Override config with CLI arguments
+    # Traditional engines
     if args.enable_gnina:
         pipeline.config["engines"]["gnina"]["enabled"] = True
     if args.enable_diffdock:
         pipeline.config["engines"]["diffdock"]["enabled"] = True
+    
+    # ML models
+    if args.enable_equibind or args.enable_all_ml:
+        pipeline.config["ml_models"]["equibind"]["enabled"] = True
+    if args.enable_neuralplexer or args.enable_all_ml:
+        pipeline.config["ml_models"]["neuralplexer"]["enabled"] = True
+    if args.enable_umol or args.enable_all_ml:
+        pipeline.config["ml_models"]["umol"]["enabled"] = True
+    if args.enable_structure_predictor or args.enable_all_ml:
+        pipeline.config["ml_models"]["structure_predictor"]["enabled"] = True
+    
+    # Analysis tools
+    if args.enable_boltz2 or args.enable_all_analysis:
+        pipeline.config["analysis"]["boltz2"]["enabled"] = True
+    if args.enable_interactions or args.enable_all_analysis:
+        pipeline.config["analysis"]["interactions"]["enabled"] = True
+    if args.enable_druggability or args.enable_all_analysis:
+        pipeline.config["analysis"]["druggability"]["enabled"] = True
+    
+    # Consensus and confidence
+    if args.enable_consensus or args.enable_all_analysis:
+        pipeline.config["analysis"]["consensus"]["enabled"] = True
+    if args.enable_confidence or args.enable_all_analysis:
+        pipeline.config["analysis"]["confidence"]["enabled"] = True
+    
+    # Processing options
     if args.max_workers:
         pipeline.config["parallel"]["max_workers"] = args.max_workers
     if args.verbose:
