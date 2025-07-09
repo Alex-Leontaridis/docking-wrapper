@@ -85,6 +85,142 @@ except ImportError as e:
     print(f"Warning: Some ML modules not available: {e}")
     ML_MODULES_AVAILABLE = False
 
+def process_single_ligand_standalone(ligand_info: Tuple[str, Path], prepared_protein: str, config: Dict, output_dir: str) -> Dict[str, Any]:
+    """
+    Standalone function for processing a single ligand in multiprocessing context.
+    This function doesn't depend on instance variables and can be pickled.
+    
+    Args:
+        ligand_info: Tuple of (ligand_name, ligand_path)
+        prepared_protein: Path to prepared protein file
+        config: Configuration dictionary
+        output_dir: Output directory path
+        
+    Returns:
+        Processing result dictionary
+    """
+    ligand_name, ligand_path = ligand_info
+    result = {
+        'ligand_name': ligand_name,
+        'ligand_path': str(ligand_path),
+        'success': False,
+        'stages': {},
+        'timings': {},
+        'errors': {},
+        'ml_results': {},
+        'analysis_results': {}
+    }
+    
+    try:
+        # Import necessary functions here to avoid pickling issues
+        from scripts.run_docking_multi import run_vina, run_gnina, run_diffdock, extract_box_from_protein
+        from scripts.prep_structures import prepare_ligand_single, validate_file, SUPPORTED_LIGAND_EXT
+        from utils.path_manager import get_path_manager
+        
+        # Setup logging for this process
+        import logging
+        logger = logging.getLogger(f"process_{ligand_name}")
+        
+        # Create output directory for this ligand
+        ligand_output_dir = Path(output_dir) / "docking_results" / ligand_name
+        ligand_output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Stage 1: Ligand preparation
+        logger.info(f"Processing ligand: {ligand_name}")
+        stage_start = time.time()
+        
+        if not os.path.exists(ligand_path):
+            result['stages']['preparation'] = False
+            result['errors']['preparation'] = f"Ligand file not found: {ligand_path}"
+            result['timings']['preparation'] = time.time() - stage_start
+            return result
+        
+        # Prepare ligand
+        prepared_dir = Path(output_dir) / "prepared_structures"
+        prepared_ligand = prepared_dir / f"{ligand_name}_prepared.pdbqt"
+        try:
+            prepare_ligand_single(str(ligand_path), str(prepared_ligand))
+            if not os.path.exists(prepared_ligand):
+                raise Exception("Ligand preparation did not create output file")
+            result['stages']['preparation'] = True
+            result['timings']['preparation'] = time.time() - stage_start
+        except Exception as e:
+            result['stages']['preparation'] = False
+            result['errors']['preparation'] = str(e)
+            result['timings']['preparation'] = time.time() - stage_start
+            return result
+        
+        # Stage 2: Traditional Docking
+        enabled_engines = []
+        if config["engines"]["vina"]["enabled"]:
+            enabled_engines.append("vina")
+        if config["engines"]["gnina"]["enabled"]:
+            enabled_engines.append("gnina")
+        if config["engines"]["diffdock"]["enabled"]:
+            enabled_engines.append("diffdock")
+        
+        if enabled_engines:
+            logger.info(f"Running traditional docking with engines: {enabled_engines}")
+            
+            # Get box parameters
+            if config["box"]["auto_detect"]:
+                try:
+                    box_params = extract_box_from_protein(prepared_protein)
+                except Exception as e:
+                    logger.warning(f"Box auto-detection failed: {e}, using defaults")
+                    default_size = config["box"]["default_size"]
+                    box_params = (0.0, 0.0, 0.0, *default_size)
+            else:
+                default_size = config["box"]["default_size"]
+                box_params = (0.0, 0.0, 0.0, *default_size)
+            
+            # Run each enabled docking engine
+            for engine in enabled_engines:
+                engine_start = time.time()
+                logger.info(f"Running {engine.upper()} docking")
+                try:
+                    if engine == "vina":
+                        status = run_vina(prepared_protein, str(prepared_ligand), str(ligand_output_dir), box_params)
+                    elif engine == "gnina":
+                        status = run_gnina(prepared_protein, str(prepared_ligand), str(ligand_output_dir), config["engines"]["gnina"]["use_gpu"])
+                    elif engine == "diffdock":
+                        status = run_diffdock(prepared_protein, str(prepared_ligand), str(ligand_output_dir))
+                    
+                    result['timings'][engine] = time.time() - engine_start
+                    
+                    if status['success']:
+                        result['stages'][engine] = True
+                        logger.info(f"{engine.upper()} completed successfully")
+                    else:
+                        result['stages'][engine] = False
+                        result['errors'][engine] = status.get('error', 'Unknown error')
+                        logger.error(f"{engine.upper()} failed: {result['errors'][engine]}")
+                        
+                except Exception as e:
+                    result['stages'][engine] = False
+                    result['errors'][engine] = str(e)
+                    result['timings'][engine] = time.time() - engine_start
+                    logger.error(f"{engine.upper()} failed with exception: {e}")
+        
+        # Mark as successful if at least one stage succeeded
+        successful_stages = [stage for stage, success in result['stages'].items() if success]
+        if successful_stages:
+            result['success'] = True
+            logger.info(f"Processing completed successfully. Successful stages: {successful_stages}")
+        else:
+            result['success'] = False
+            logger.error("All stages failed")
+        
+        result['total_time'] = time.time() - stage_start
+        return result
+        
+    except Exception as e:
+        logger.error(f"Unexpected error in ligand processing: {e}")
+        result['success'] = False
+        result['errors']['unexpected'] = str(e)
+        result['total_time'] = time.time() - stage_start
+        return result
+
 # --- Constants ---
 DEFAULT_CONFIG = {
     "engines": {
@@ -200,9 +336,10 @@ class BatchDockingPipeline:
         
         self._ensure_output_dirs()
         
-        # Thread safety and resource management
-        self._lock = threading.Lock()
-        self._process_lock = ProcessLock()
+        # Process safety and resource management (using multiprocessing-safe locks)
+        from multiprocessing import Lock, Manager
+        self._lock = Lock()  # Multiprocessing-safe lock
+        self._process_lock = Lock()  # Multiprocessing-safe lock
         self._shared_memory_manager = None
         self._active_processes = set()
         self._cleanup_registered = False
@@ -1185,10 +1322,14 @@ class BatchDockingPipeline:
                 
                 print(f"{COLOR_INFO}Processing {len(ligands)} ligands in parallel with {self.config['parallel']['max_workers']} workers{COLOR_RESET}")
                 
-                # Use thread-safe processing with proper resource management
+                # Use process-safe processing with proper resource management
                 with Pool(processes=self.config["parallel"]["max_workers"]) as pool:
-                    # Create a thread-safe wrapper for the processing function
-                    process_func = partial(self._process_single_ligand_safe, prepared_protein=prepared_protein)
+                    # Create a process-safe wrapper for the processing function
+                    # Pass necessary data as arguments instead of using instance variables
+                    process_func = partial(process_single_ligand_standalone, 
+                                         prepared_protein=prepared_protein,
+                                         config=self.config,
+                                         output_dir=str(self.output_dir))
                     
                     # Process ligands with proper error handling
                     results = []
@@ -1208,10 +1349,14 @@ class BatchDockingPipeline:
                                 processed_result = result.get(timeout=3600)  # 1 hour timeout
                                 processed_results.append(processed_result)
                                 
-                                # Update statistics thread-safely
+                                # Update statistics (no need for thread safety in main process)
                                 ligand_name = ligands[i][0]
                                 success = processed_result.get('success', False)
-                                self._update_statistics(ligand_name, success, processed_result)
+                                if success:
+                                    self.successful_ligands += 1
+                                    self.ligand_results[ligand_name] = processed_result
+                                else:
+                                    self.failed_ligands.add(ligand_name)
                             else:
                                 # Handle failed submission
                                 ligand_name = ligands[i][0]
@@ -1222,7 +1367,7 @@ class BatchDockingPipeline:
                                     'total_time': 0
                                 }
                                 processed_results.append(failed_result)
-                                self._update_statistics(ligand_name, False, failed_result)
+                                self.failed_ligands.add(ligand_name)
                                 
                         except Exception as e:
                             self.logger.error(f"Failed to get result for ligand {ligands[i][0]}: {e}")
@@ -1233,7 +1378,7 @@ class BatchDockingPipeline:
                                 'total_time': 0
                             }
                             processed_results.append(failed_result)
-                            self._update_statistics(ligands[i][0], False, failed_result)
+                            self.failed_ligands.add(ligands[i][0])
                 
                 results = processed_results
             else:
@@ -1247,7 +1392,11 @@ class BatchDockingPipeline:
                         # Update statistics
                         ligand_name = ligand_info[0]
                         success = result.get('success', False)
-                        self._update_statistics(ligand_name, success, result)
+                        if success:
+                            self.successful_ligands += 1
+                            self.ligand_results[ligand_name] = result
+                        else:
+                            self.failed_ligands.add(ligand_name)
                         
                     except Exception as e:
                         self.logger.error(f"Failed to process ligand {ligand_info[0]}: {e}")
@@ -1258,7 +1407,7 @@ class BatchDockingPipeline:
                             'total_time': 0
                         }
                         results.append(failed_result)
-                        self._update_statistics(ligand_info[0], False, failed_result)
+                        self.failed_ligands.add(ligand_info[0])
             
             self.print_final_summary(results)
             return {
@@ -1282,29 +1431,7 @@ class BatchDockingPipeline:
             # Ensure cleanup happens
             self._cleanup_resources()
     
-    def _process_single_ligand_safe(self, ligand_info: Tuple[str, Path], prepared_protein: str) -> Dict[str, Any]:
-        """
-        Thread-safe wrapper for processing a single ligand.
-        
-        Args:
-            ligand_info: Tuple of (ligand_name, ligand_path)
-            prepared_protein: Path to prepared protein file
-            
-        Returns:
-            Processing result dictionary
-        """
-        try:
-            # Use process lock for shared resource access
-            with self._process_lock:
-                return self.process_single_ligand(ligand_info, prepared_protein)
-        except Exception as e:
-            self.logger.error(f"Error in thread-safe ligand processing: {e}")
-            return {
-                'ligand_name': ligand_info[0],
-                'success': False,
-                'errors': {'thread_safe': str(e)},
-                'total_time': 0
-            }
+
     
     def _generate_final_summary(self) -> str:
         """Generate final aggregated summary CSV."""
@@ -1382,14 +1509,7 @@ class BatchDockingPipeline:
         except Exception as e:
             self.logger.error(f"Error during cleanup: {e}")
     
-    def _update_statistics(self, ligand_name: str, success: bool, result: dict):
-        """Thread-safe update of pipeline statistics."""
-        with self._lock:
-            if success:
-                self.successful_ligands += 1
-                self.ligand_results[ligand_name] = result
-            else:
-                self.failed_ligands.add(ligand_name)
+
     
     def _register_process(self, process):
         """Register a process for cleanup tracking."""
