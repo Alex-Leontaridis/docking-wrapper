@@ -685,10 +685,20 @@ class BatchDockingPipeline:
                 
                 # Run enabled ML models
                 ml_poses = []
+                ml_models_found = False
                 for model_name, model_config in self.config["ml_models"].items():
                     if not model_config.get("enabled", False):
                         continue
-                        
+
+                    # Check if model directory exists
+                    model_dir = self.path_manager.get_path("models", model_name)
+                    if not model_dir or not os.path.exists(model_dir):
+                        self.logger.warning(f"[{ligand_name}] {model_name} model directory not found: {model_dir}. Skipping {model_name}.")
+                        result['stages'][f"ml_{model_name}"] = False
+                        result['errors'][f"ml_{model_name}"] = f"{model_name} model directory not found: {model_dir}"
+                        continue
+                    ml_models_found = True
+
                     model_start = time.time()
                     self.logger.info(f"[{ligand_name}] Running {model_name.upper()} ML docking")
                     
@@ -740,7 +750,8 @@ class BatchDockingPipeline:
                         result['errors'][f"ml_{model_name}"] = str(e)
                         result['timings'][f"ml_{model_name}"] = time.time() - model_start
                         self.logger.error(f"[{ligand_name}] {model_name.upper()} failed with exception: {e}")
-                
+                if not ml_models_found:
+                    self.logger.warning(f"[{ligand_name}] No ML model directories found. Skipping ML docking.")
                 result['timings']['ml_docking'] = time.time() - ml_start
                 result['ml_poses'] = ml_poses
             
