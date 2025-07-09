@@ -69,13 +69,21 @@ class Config:
         if vina_path and os.path.exists(vina_path):
             return vina_path
         
-        # Check if vina is in PATH
+        # Check if vina is in PATH (try both variants)
         import shutil
-        if shutil.which('vina'):
-            return 'vina'
+        system = platform.system().lower()
+        
+        # Try platform-appropriate name first
+        if system == 'windows':
+            vina_names = ['vina.exe', 'vina']
+        else:  # Linux/macOS
+            vina_names = ['vina', 'vina.exe']
+        
+        for vina_name in vina_names:
+            if shutil.which(vina_name):
+                return vina_name
         
         # Platform-specific common locations
-        system = platform.system().lower()
         if system == 'windows':
             possible_paths = [
                 'vina.exe',  # In PATH
@@ -154,9 +162,69 @@ class Config:
     
     def _find_diffdock(self) -> Optional[str]:
         """Find DiffDock installation."""
+        # Check environment variable first
         diffdock_path = os.environ.get('DIFFDOCK_PATH')
         if diffdock_path and os.path.exists(diffdock_path):
-            return diffdock_path
+            # Check if it's a directory containing inference.py
+            inference_script = os.path.join(diffdock_path, 'inference.py')
+            if os.path.isfile(inference_script):
+                return inference_script
+            # If it's a directory but no inference.py, return the directory
+            elif os.path.isdir(diffdock_path):
+                return diffdock_path
+        
+        # Check current working directory for DiffDock
+        cwd = os.getcwd()
+        local_paths = [
+            os.path.join(cwd, 'DiffDock', 'inference.py'),
+            os.path.join(cwd, 'diffdock', 'inference.py'),
+            os.path.join(cwd, 'DiffDock'),
+            os.path.join(cwd, 'diffdock'),
+        ]
+        
+        for path in local_paths:
+            if os.path.isfile(path):
+                return path
+            elif os.path.isdir(path):
+                # Check if directory contains inference.py
+                inference_script = os.path.join(path, 'inference.py')
+                if os.path.isfile(inference_script):
+                    return inference_script
+        
+        # Platform-specific common locations
+        system = platform.system().lower()
+        if system == 'windows':
+            possible_paths = [
+                os.path.join(os.path.expanduser('~'), 'DiffDock', 'inference.py'),
+                os.path.join(os.environ.get('PROGRAMFILES', 'C:\\Program Files'), 'DiffDock', 'inference.py'),
+                os.path.join(os.path.expanduser('~'), 'DiffDock'),
+                os.path.join(os.environ.get('PROGRAMFILES', 'C:\\Program Files'), 'DiffDock'),
+            ]
+        else:  # Linux/macOS
+            possible_paths = [
+                os.path.join(cwd, 'DiffDock', 'inference.py'),
+                os.path.join(cwd, 'diffdock', 'inference.py'),
+                os.path.join(os.path.expanduser('~'), 'DiffDock', 'inference.py'),
+                '/opt/DiffDock/inference.py',
+                '/usr/local/DiffDock/inference.py',
+                '/usr/share/DiffDock/inference.py',
+                os.path.join(cwd, 'DiffDock'),
+                os.path.join(cwd, 'diffdock'),
+                os.path.join(os.path.expanduser('~'), 'DiffDock'),
+                '/opt/DiffDock',
+                '/usr/local/DiffDock',
+                '/usr/share/DiffDock',
+            ]
+        
+        for path in possible_paths:
+            if os.path.isfile(path):
+                return path
+            elif os.path.isdir(path):
+                # Check if directory contains inference.py
+                inference_script = os.path.join(path, 'inference.py')
+                if os.path.isfile(inference_script):
+                    return inference_script
+        
         return None
     
     def _log_tool_status(self):

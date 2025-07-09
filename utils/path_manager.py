@@ -34,9 +34,14 @@ class PathManager:
         # Try to find the project root by looking for key files
         current = Path(__file__).resolve()
         while current.parent != current:
+            # Check if this is the project root by looking for key files/directories
             if (current / "scripts" / "batch_pipeline.py").exists():
                 return current
             if (current / "requirements.txt").exists():
+                return current
+            if (current / "config.py").exists():
+                return current
+            if (current / "DiffDock").exists() and (current / "scripts").exists():
                 return current
             current = current.parent
         
@@ -93,7 +98,7 @@ class PathManager:
         paths.update({
             "vina": self._find_tool_path("vina", "VINA_PATH", system),
             "gnina": self._find_tool_path("gnina", "GNINA_PATH", system),
-            "diffdock": self._find_tool_path("diffdock", "DIFFDOCK_PATH", system),
+            "diffdock": self._find_diffdock_path(system),
             "mgltools": self._find_mgltools_path(system),
         })
         
@@ -162,6 +167,72 @@ class PathManager:
         
         return None
     
+    def _find_diffdock_path(self, system: str) -> Optional[str]:
+        """Find DiffDock installation path."""
+        # Check environment variable first
+        diffdock_path = os.environ.get('DIFFDOCK_PATH')
+        if diffdock_path and os.path.exists(diffdock_path):
+            # Check if it's a directory containing inference.py
+            inference_script = os.path.join(diffdock_path, 'inference.py')
+            if os.path.isfile(inference_script):
+                return inference_script
+            # If it's a directory but no inference.py, return the directory
+            elif os.path.isdir(diffdock_path):
+                return diffdock_path
+        
+        # Check current working directory for DiffDock
+        cwd = os.getcwd()
+        local_paths = [
+            os.path.join(cwd, 'DiffDock', 'inference.py'),
+            os.path.join(cwd, 'diffdock', 'inference.py'),
+            os.path.join(cwd, 'DiffDock'),
+            os.path.join(cwd, 'diffdock'),
+        ]
+        
+        for path in local_paths:
+            if os.path.isfile(path):
+                return path
+            elif os.path.isdir(path):
+                # Check if directory contains inference.py
+                inference_script = os.path.join(path, 'inference.py')
+                if os.path.isfile(inference_script):
+                    return inference_script
+        
+        # Platform-specific common locations
+        if system == 'windows':
+            possible_paths = [
+                os.path.join(os.path.expanduser('~'), 'DiffDock', 'inference.py'),
+                os.path.join(os.environ.get('PROGRAMFILES', 'C:\\Program Files'), 'DiffDock', 'inference.py'),
+                os.path.join(os.path.expanduser('~'), 'DiffDock'),
+                os.path.join(os.environ.get('PROGRAMFILES', 'C:\\Program Files'), 'DiffDock'),
+            ]
+        else:  # Linux/macOS
+            possible_paths = [
+                os.path.join(cwd, 'DiffDock', 'inference.py'),
+                os.path.join(cwd, 'diffdock', 'inference.py'),
+                os.path.join(os.path.expanduser('~'), 'DiffDock', 'inference.py'),
+                '/opt/DiffDock/inference.py',
+                '/usr/local/DiffDock/inference.py',
+                '/usr/share/DiffDock/inference.py',
+                os.path.join(cwd, 'DiffDock'),
+                os.path.join(cwd, 'diffdock'),
+                os.path.join(os.path.expanduser('~'), 'DiffDock'),
+                '/opt/DiffDock',
+                '/usr/local/DiffDock',
+                '/usr/share/DiffDock',
+            ]
+        
+        for path in possible_paths:
+            if os.path.isfile(path):
+                return path
+            elif os.path.isdir(path):
+                # Check if directory contains inference.py
+                inference_script = os.path.join(path, 'inference.py')
+                if os.path.isfile(inference_script):
+                    return inference_script
+        
+        return None
+
     def _find_mgltools_path(self, system: str) -> Optional[str]:
         """Find MGLTools installation path."""
         # Check environment variable first

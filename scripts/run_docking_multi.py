@@ -296,6 +296,16 @@ def find_binary(binary_name, env_var=None, config_path=None):
             if os.path.isfile(gnina_local):
                 logger.info(f"Found gnina in current directory: {gnina_local}")
                 return gnina_local
+    
+    # Special case: vina - try both vina and vina.exe
+    if binary_name in ['vina', 'vina.exe']:
+        # Try the other variant if current one not found
+        other_name = 'vina.exe' if binary_name == 'vina' else 'vina'
+        other_path = os.path.join(cwd, other_name)
+        if os.path.isfile(other_path):
+            logger.info(f"Found {other_name} in current directory: {other_path}")
+            return other_path
+    
     # 2. Config path
     if config_path and os.path.isfile(config_path):
         logger.info(f"Found {binary_name} via config: {config_path}")
@@ -311,6 +321,7 @@ def find_binary(binary_name, env_var=None, config_path=None):
     if which_path:
         logger.info(f"Found {binary_name} in PATH: {which_path}")
         return which_path
+    
     # 5. For Windows: Check WSL for Linux-only binaries
     if platform.system().lower() == 'windows':
         try:
@@ -323,6 +334,15 @@ def find_binary(binary_name, env_var=None, config_path=None):
                     return f"wsl:{wsl_path}"  # Mark as WSL binary
         except:
             pass
+    
+    # 6. For vina: try the other variant in PATH
+    if binary_name in ['vina', 'vina.exe']:
+        other_name = 'vina.exe' if binary_name == 'vina' else 'vina'
+        other_which_path = shutil.which(other_name)
+        if other_which_path:
+            logger.info(f"Found {other_name} in PATH: {other_which_path}")
+            return other_which_path
+    
     logger.warning(f"Binary {binary_name} not found in any location")
     return None
 
@@ -365,12 +385,21 @@ logger.info(f"Available ML models: EquiBind (all platforms), NeuralPLexer (all p
 
 def run_vina(protein, ligand, output_dir, box_params):
     """Run AutoDock Vina CLI."""
-    vina_bin = find_binary('vina', env_var='VINA_PATH', config_path=getattr(config, 'vina_path', None))
+    import platform
+    
+    # Platform-specific vina binary name
+    system = platform.system().lower()
+    if system == 'windows':
+        vina_binary = 'vina.exe'
+    else:  # Linux/macOS
+        vina_binary = 'vina'
+    
+    vina_bin = find_binary(vina_binary, env_var='VINA_PATH', config_path=getattr(config, 'vina_path', None))
     
     if not vina_bin:
         return {
             'success': False,
-            'error': 'Vina binary not found. Please ensure vina.exe is in the current directory or set VINA_PATH.',
+            'error': f'Vina binary not found. Please ensure {vina_binary} is in the current directory or set VINA_PATH.',
             'time': 0.0
         }
     

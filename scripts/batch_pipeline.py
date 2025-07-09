@@ -221,7 +221,15 @@ class BatchDockingPipeline:
     
     def _check_external_binaries(self):
         """Check for required external binaries and exit if missing."""
-        required_binaries = ["vina.exe", "gnina"]
+        import platform
+        
+        # Platform-specific binary names
+        system = platform.system().lower()
+        if system == 'windows':
+            required_binaries = ["vina.exe", "gnina"]
+        else:  # Linux/macOS
+            required_binaries = ["vina", "gnina"]
+        
         missing = []
         
         for binary in required_binaries:
@@ -233,10 +241,20 @@ class BatchDockingPipeline:
         
         # Check for DiffDock script
         diffdock_path = self.path_manager.get_path("diffdock")
-        if not diffdock_path or not os.path.isfile(diffdock_path):
+        if not diffdock_path:
             missing.append('DiffDock/inference.py')
         else:
-            self.logger.info(f"Found DiffDock: {diffdock_path}")
+            # Check if it's a file (inference.py) or directory containing inference.py
+            if os.path.isfile(diffdock_path):
+                self.logger.info(f"Found DiffDock script: {diffdock_path}")
+            elif os.path.isdir(diffdock_path):
+                inference_script = os.path.join(diffdock_path, 'inference.py')
+                if os.path.isfile(inference_script):
+                    self.logger.info(f"Found DiffDock directory: {diffdock_path}")
+                else:
+                    missing.append('DiffDock/inference.py')
+            else:
+                missing.append('DiffDock/inference.py')
         
         # Check for MGLTools (optional, but warn if missing)
         self.config_obj = DockingConfig()
