@@ -175,6 +175,9 @@ class PathManager:
             # Check if it's a directory containing inference.py
             inference_script = os.path.join(diffdock_path, 'inference.py')
             if os.path.isfile(inference_script):
+                # Check if it's a dummy script
+                if self._is_dummy_diffdock_script(inference_script):
+                    return None  # Don't return dummy script
                 return inference_script
             # If it's a directory but no inference.py, return the directory
             elif os.path.isdir(diffdock_path):
@@ -191,11 +194,17 @@ class PathManager:
         
         for path in local_paths:
             if os.path.isfile(path):
+                # Check if it's a dummy script
+                if self._is_dummy_diffdock_script(path):
+                    continue  # Skip dummy scripts
                 return path
             elif os.path.isdir(path):
                 # Check if directory contains inference.py
                 inference_script = os.path.join(path, 'inference.py')
                 if os.path.isfile(inference_script):
+                    # Check if it's a dummy script
+                    if self._is_dummy_diffdock_script(inference_script):
+                        continue  # Skip dummy scripts
                     return inference_script
         
         # Platform-specific common locations
@@ -224,14 +233,36 @@ class PathManager:
         
         for path in possible_paths:
             if os.path.isfile(path):
+                # Check if it's a dummy script
+                if self._is_dummy_diffdock_script(path):
+                    continue  # Skip dummy scripts
                 return path
             elif os.path.isdir(path):
                 # Check if directory contains inference.py
                 inference_script = os.path.join(path, 'inference.py')
                 if os.path.isfile(inference_script):
+                    # Check if it's a dummy script
+                    if self._is_dummy_diffdock_script(inference_script):
+                        continue  # Skip dummy scripts
                     return inference_script
         
         return None
+
+    def _is_dummy_diffdock_script(self, script_path: str) -> bool:
+        """Check if a DiffDock script is a dummy script."""
+        try:
+            with open(script_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                # Check for dummy script indicators
+                dummy_indicators = [
+                    "DIFFDOCK NOT INSTALLED",
+                    "This is a dummy script",
+                    "DiffDock Dummy Script",
+                    "placeholder script"
+                ]
+                return any(indicator in content for indicator in dummy_indicators)
+        except Exception:
+            return False
 
     def _find_mgltools_path(self, system: str) -> Optional[str]:
         """Find MGLTools installation path."""

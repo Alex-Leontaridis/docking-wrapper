@@ -239,22 +239,31 @@ class BatchDockingPipeline:
             else:
                 self.logger.info(f"Found {binary}: {found_path}")
         
-        # Check for DiffDock script
-        diffdock_path = self.path_manager.get_path("diffdock")
-        if not diffdock_path:
-            missing.append('DiffDock/inference.py')
-        else:
-            # Check if it's a file (inference.py) or directory containing inference.py
-            if os.path.isfile(diffdock_path):
-                self.logger.info(f"Found DiffDock script: {diffdock_path}")
-            elif os.path.isdir(diffdock_path):
-                inference_script = os.path.join(diffdock_path, 'inference.py')
-                if os.path.isfile(inference_script):
-                    self.logger.info(f"Found DiffDock directory: {diffdock_path}")
+        # Check for DiffDock script (only if enabled in config)
+        if self.config["engines"]["diffdock"]["enabled"]:
+            diffdock_path = self.path_manager.get_path("diffdock")
+            if not diffdock_path:
+                missing.append('DiffDock/inference.py')
+                self.logger.warning("DiffDock is enabled in config but not found. Disabling DiffDock.")
+                self.config["engines"]["diffdock"]["enabled"] = False
+            else:
+                # Check if it's a file (inference.py) or directory containing inference.py
+                if os.path.isfile(diffdock_path):
+                    self.logger.info(f"Found DiffDock script: {diffdock_path}")
+                elif os.path.isdir(diffdock_path):
+                    inference_script = os.path.join(diffdock_path, 'inference.py')
+                    if os.path.isfile(inference_script):
+                        self.logger.info(f"Found DiffDock directory: {diffdock_path}")
+                    else:
+                        missing.append('DiffDock/inference.py')
+                        self.logger.warning("DiffDock directory found but inference.py missing. Disabling DiffDock.")
+                        self.config["engines"]["diffdock"]["enabled"] = False
                 else:
                     missing.append('DiffDock/inference.py')
-            else:
-                missing.append('DiffDock/inference.py')
+                    self.logger.warning("DiffDock path exists but is neither file nor directory. Disabling DiffDock.")
+                    self.config["engines"]["diffdock"]["enabled"] = False
+        else:
+            self.logger.info("DiffDock is disabled in configuration - skipping DiffDock checks")
         
         # Check for MGLTools (optional, but warn if missing)
         self.config_obj = DockingConfig()
