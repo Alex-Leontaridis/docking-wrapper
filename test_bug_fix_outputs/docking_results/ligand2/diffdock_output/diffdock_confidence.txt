@@ -1,0 +1,4 @@
+pose_id,confidence_score
+1,0.85
+2,0.72
+3,0.68

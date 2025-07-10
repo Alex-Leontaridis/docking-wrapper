@@ -417,17 +417,13 @@ class BatchDockingPipeline:
         """Check for required external binaries and exit if missing."""
         import platform
         
-        # Platform-specific binary names
-        system = platform.system().lower()
-        if system == 'windows':
-            required_binaries = ["vina.exe", "gnina"]
-        else:  # Linux/macOS
-            required_binaries = ["vina", "gnina"]
+        # Use unified binary detection via PathManager
+        required_binaries = ["vina", "gnina"]  # Use base names, PathManager handles extensions
         
         missing = []
         
         for binary in required_binaries:
-            found_path = find_binary(binary)
+            found_path = self.path_manager.get_binary_path(binary)
             if found_path is None:
                 missing.append(binary)
             else:

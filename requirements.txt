@@ -1,5 +1,5 @@
 # Python version requirement
-python>=3.10,<3.11
+python>=3.10,<3.12
 
 # Core dependencies
 pandas>=1.3.0
@@ -10,7 +10,7 @@ matplotlib>=3.5.0
 seaborn>=0.11.0
 
 # Docking and chemistry
-rdkit-pypi>=2022.9.1
+rdkit>=2022.9.1
 meeko
 biopython>=1.79
 scikit-learn

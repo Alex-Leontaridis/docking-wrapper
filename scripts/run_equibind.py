@@ -20,7 +20,11 @@ import signal
 import logging
 from utils.logging import setup_logging, log_startup, log_shutdown, log_error_with_context
 import hashlib
-import psutil
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
 import threading
 from pathlib import Path
 from typing import Tuple, Optional, List, Dict, Any
@@ -265,6 +269,9 @@ def find_conda():
 
 def check_system_resources(config: Dict[str, Any]) -> Tuple[bool, str]:
     """Check if system has sufficient resources"""
+    if not PSUTIL_AVAILABLE:
+        return True, "psutil not available - skipping resource check"
+    
     try:
         memory = psutil.virtual_memory()
         cpu_percent = psutil.cpu_percent(interval=1)

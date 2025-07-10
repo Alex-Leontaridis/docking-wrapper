@@ -1,5 +1,5 @@
 # Python version requirement
-python>=3.10,<3.11
+python>=3.10,<3.12
 
 # Only standard library required for orchestrator and runners
 # Add model-specific dependencies here if needed in the future
@@ -19,7 +19,7 @@ torchvision>=0.13.0
 torchaudio>=0.12.0
 
 # Molecular modeling
-rdkit-pypi>=2022.9.1
+rdkit>=2022.9.1
 biopython>=1.79
 openmm>=8.0.0
 mdtraj>=1.9.7

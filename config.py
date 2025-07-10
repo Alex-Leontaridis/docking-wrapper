@@ -63,102 +63,16 @@ class Config:
         return None
     
     def _find_vina(self) -> Optional[str]:
-        """Find Vina executable."""
-        # Check environment variable first
-        vina_path = os.environ.get('VINA_PATH')
-        if vina_path and os.path.exists(vina_path):
-            return vina_path
-        
-        # Check if vina is in PATH (try both variants)
-        import shutil
-        system = platform.system().lower()
-        
-        # Try platform-appropriate name first
-        if system == 'windows':
-            vina_names = ['vina.exe', 'vina']
-        else:  # Linux/macOS
-            vina_names = ['vina', 'vina.exe']
-        
-        for vina_name in vina_names:
-            if shutil.which(vina_name):
-                return vina_name
-        
-        # Platform-specific common locations
-        if system == 'windows':
-            possible_paths = [
-                'vina.exe',  # In PATH
-                './vina.exe',  # Current directory
-                './vina.bat',  # Current directory
-                './vina',  # Current directory
-                'bin/vina.bat',  # Local bin directory
-                'bin/vina',  # Local bin directory
-            ]
-        elif system == 'darwin':  # macOS
-            possible_paths = [
-                '/usr/local/bin/vina',
-                '/opt/homebrew/bin/vina',
-                os.path.expanduser('~/vina'),
-                './vina',
-            ]
-        else:  # Linux
-            possible_paths = [
-                '/usr/local/bin/vina',
-                '/usr/bin/vina',
-                '/opt/conda/envs/docking/bin/vina',
-                os.path.expanduser('~/vina'),
-                './vina',
-            ]
-        
-        for path in possible_paths:
-            if os.path.isfile(path) and os.access(path, os.X_OK):
-                return path
-        
-        return None
+        """Find Vina executable using PathManager."""
+        from utils.path_manager import get_path_manager
+        path_manager = get_path_manager()
+        return path_manager.get_binary_path('vina')
     
     def _find_gnina(self) -> Optional[str]:
-        """Find GNINA executable."""
-        # Check environment variable first
-        gnina_path = os.environ.get('GNINA_PATH')
-        if gnina_path and os.path.exists(gnina_path):
-            return gnina_path
-        
-        # Check if gnina is in PATH
-        import shutil
-        if shutil.which('gnina'):
-            return 'gnina'
-        
-        # Platform-specific common locations
-        system = platform.system().lower()
-        if system == 'windows':
-            possible_paths = [
-                'gnina.exe',  # In PATH
-                './gnina.exe',  # Current directory
-                './gnina.bat',  # Current directory
-                './gnina',  # Current directory
-                'bin/gnina.bat',  # Local bin directory
-                'bin/gnina',  # Local bin directory
-            ]
-        elif system == 'darwin':  # macOS
-            possible_paths = [
-                '/usr/local/bin/gnina',
-                '/opt/homebrew/bin/gnina',
-                os.path.expanduser('~/gnina'),
-                './gnina',
-            ]
-        else:  # Linux
-            possible_paths = [
-                '/usr/local/bin/gnina',
-                '/usr/bin/gnina',
-                '/opt/conda/envs/docking/bin/gnina',
-                os.path.expanduser('~/gnina'),
-                './gnina',
-            ]
-        
-        for path in possible_paths:
-            if os.path.isfile(path) and os.access(path, os.X_OK):
-                return path
-        
-        return None
+        """Find GNINA executable using PathManager."""
+        from utils.path_manager import get_path_manager
+        path_manager = get_path_manager()
+        return path_manager.get_binary_path('gnina')
     
     def _find_diffdock(self) -> Optional[str]:
         """Find DiffDock installation."""

@@ -24,6 +24,10 @@ class PathManager:
         Args:
             config_file: Optional path to configuration file
         """
+        # Initialize logger
+        import logging
+        self.logger = logging.getLogger(__name__)
+        
         self.project_root = self._get_project_root()
         self.config_file = config_file or self._get_default_config_path()
         self.paths = self._load_paths()
@@ -144,47 +148,8 @@ class PathManager:
     
     def _find_tool_path(self, tool_name: str, env_var: str, system: str) -> Optional[str]:
         """Find tool path using environment variables and platform detection."""
-        # Check environment variable first
-        env_path = os.environ.get(env_var)
-        if env_path and os.path.exists(env_path):
-            return env_path
-        
-        # Check if tool is in PATH
-        if shutil.which(tool_name):
-            return tool_name
-        
-        # Platform-specific common locations
-        if system == 'windows':
-            possible_paths = [
-                f"{tool_name}.exe",
-                f"./{tool_name}.exe",
-                f"./{tool_name}.bat",
-                f"./{tool_name}",
-                f"bin/{tool_name}.bat",
-                f"bin/{tool_name}",
-            ]
-        elif system == 'darwin':  # macOS
-            possible_paths = [
-                f"/usr/local/bin/{tool_name}",
-                f"/opt/homebrew/bin/{tool_name}",
-                f"~/{tool_name}",
-                f"./{tool_name}",
-            ]
-        else:  # Linux
-            possible_paths = [
-                f"/usr/local/bin/{tool_name}",
-                f"/usr/bin/{tool_name}",
-                f"/opt/conda/envs/docking/bin/{tool_name}",
-                f"~/{tool_name}",
-                f"./{tool_name}",
-            ]
-        
-        for path in possible_paths:
-            expanded_path = os.path.expanduser(path)
-            if shutil.which(expanded_path):
-                return expanded_path
-        
-        return None
+        # Use the unified binary detection method
+        return self.get_binary_path(tool_name)
     
     def _find_diffdock_path(self, system: str) -> Optional[str]:
         """Find DiffDock installation path."""
@@ -460,6 +425,166 @@ class PathManager:
             "processor": platform.processor(),
             "python_version": sys.version,
         }
+
+    def get_binary_path(self, tool_name: str) -> Optional[str]:
+        """
+        Unified binary detection method that consolidates all binary finding logic.
+        
+        Args:
+            tool_name: Name of the binary to find (e.g., 'vina', 'gnina')
+            
+        Returns:
+            Path to the binary or None if not found
+        """
+        system = platform.system().lower()
+        
+        # Get platform-specific binary name
+        binary_name = self._get_platform_binary_name(tool_name, system)
+        
+        # Check environment variable first
+        env_var = f"{tool_name.upper()}_PATH"
+        env_path = os.environ.get(env_var)
+        if env_path and os.path.exists(env_path):
+            self.logger.info(f"Found {tool_name} via environment variable {env_var}: {env_path}")
+            return env_path
+        
+        # Check current working directory (highest priority for local binaries)
+        cwd = os.getcwd()
+        local_path = os.path.join(cwd, binary_name)
+        if os.path.isfile(local_path):
+            self.logger.info(f"Found {tool_name} in current directory: {local_path}")
+            return local_path
+        
+        # Check for platform-specific extensions in current directory
+        if system == 'windows':
+            # Check for .bat files on Windows (for dummy scripts)
+            base_name = os.path.splitext(binary_name)[0]
+            bat_path = os.path.join(cwd, f'{base_name}.bat')
+            if os.path.isfile(bat_path):
+                self.logger.info(f"Found {base_name}.bat in current directory: {bat_path}")
+                return bat_path
+        elif system == 'linux':
+            # Check for .sh files on Linux (for dummy scripts)
+            base_name = os.path.splitext(binary_name)[0]
+            sh_path = os.path.join(cwd, f'{base_name}.sh')
+            if os.path.isfile(sh_path) and os.access(sh_path, os.X_OK):
+                self.logger.info(f"Found {base_name}.sh in current directory: {sh_path}")
+                return sh_path
+            
+            # Check in bin/ subdirectory
+            bin_sh_path = os.path.join(cwd, 'bin', f'{base_name}.sh')
+            if os.path.isfile(bin_sh_path) and os.access(bin_sh_path, os.X_OK):
+                self.logger.info(f"Found {base_name}.sh in bin directory: {bin_sh_path}")
+                return bin_sh_path
+        
+        # Check PATH
+        path_binary = shutil.which(binary_name)
+        if path_binary:
+            # For GNINA, check if it's a working binary
+            if tool_name == 'gnina' and system == 'linux':
+                try:
+                    import subprocess
+                    result = subprocess.run([path_binary, '--version'], 
+                                          capture_output=True, text=True, timeout=5)
+                    if result.returncode != 0 or 'error while loading shared libraries' in result.stderr:
+                        self.logger.warning(f"Found GNINA in PATH but it has missing dependencies: {path_binary}")
+                        # Don't return this broken binary, continue to look for local scripts
+                    else:
+                        self.logger.info(f"Found {tool_name} in PATH: {path_binary}")
+                        return path_binary
+                except (subprocess.TimeoutExpired, OSError, FileNotFoundError):
+                    self.logger.warning(f"Found GNINA in PATH but it's not working: {path_binary}")
+                    # Don't return this broken binary, continue to look for local scripts
+            else:
+                self.logger.info(f"Found {tool_name} in PATH: {path_binary}")
+                return path_binary
+        
+        # Check common installation paths
+        common_paths = self._get_common_paths(system)
+        for common_path in common_paths:
+            binary_path = os.path.join(common_path, binary_name)
+            if os.path.isfile(binary_path) and os.access(binary_path, os.X_OK):
+                # For GNINA, check if it's a working binary
+                if tool_name == 'gnina':
+                    try:
+                        import subprocess
+                        result = subprocess.run([binary_path, '--version'], 
+                                              capture_output=True, text=True, timeout=5)
+                        if result.returncode != 0 or 'error while loading shared libraries' in result.stderr:
+                            self.logger.warning(f"Found GNINA in {common_path} but it has missing dependencies: {binary_path}")
+                            continue  # Skip this broken binary
+                    except (subprocess.TimeoutExpired, OSError, FileNotFoundError):
+                        self.logger.warning(f"Found GNINA in {common_path} but it's not working: {binary_path}")
+                        continue  # Skip this broken binary
+                
+                self.logger.info(f"Found {tool_name} in {common_path}: {binary_path}")
+                return binary_path
+        
+        # For Windows: Check WSL if binary is Linux-only (like GNINA)
+        if system == 'windows' and tool_name == 'gnina':
+            try:
+                import subprocess
+                result = subprocess.run(['wsl', 'which', 'gnina'], 
+                                      capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    wsl_path = result.stdout.strip()
+                    if wsl_path:
+                        self.logger.info(f"Found GNINA in WSL: wsl:{wsl_path}")
+                        return f"wsl:{wsl_path}"
+            except (subprocess.TimeoutExpired, OSError, FileNotFoundError):
+                pass
+        
+        self.logger.warning(f"Could not find {tool_name} binary")
+        return None
+    
+    def _get_platform_binary_name(self, tool_name: str, system: str) -> str:
+        """
+        Get platform-specific binary name.
+        
+        Args:
+            tool_name: Base name of the tool
+            system: Platform system name
+            
+        Returns:
+            Platform-specific binary name
+        """
+        if system == 'windows':
+            return f"{tool_name}.exe"
+        else:
+            return tool_name
+    
+    def _get_common_paths(self, system: str) -> List[str]:
+        """
+        Get common installation paths for the current platform.
+        
+        Args:
+            system: Platform system name
+            
+        Returns:
+            List of common paths to check
+        """
+        if system == 'windows':
+            return [
+                os.path.join(os.environ.get('PROGRAMFILES', 'C:\\Program Files'), 'bin'),
+                os.path.join(os.environ.get('PROGRAMFILES(X86)', 'C:\\Program Files (x86)'), 'bin'),
+                os.path.expanduser('~/bin'),
+                os.path.expanduser('~/AppData/Local/Programs'),
+            ]
+        elif system == 'darwin':  # macOS
+            return [
+                '/usr/local/bin',
+                '/opt/homebrew/bin',
+                '/opt/local/bin',
+                os.path.expanduser('~/bin'),
+            ]
+        else:  # Linux
+            return [
+                '/usr/local/bin',
+                '/usr/bin',
+                '/opt/conda/envs/docking/bin',
+                '/opt/bin',
+                os.path.expanduser('~/bin'),
+            ]
 
 
 # Global path manager instance

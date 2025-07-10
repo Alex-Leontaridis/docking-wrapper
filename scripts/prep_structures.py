@@ -369,9 +369,16 @@ def prepare_protein(protein_file):
                     logger.info(f"Protein prepared using meeko fallback method")
                     
                 except ImportError as e:
-                    logger.error(f"Required packages not available for protein preparation: {e}")
-                    logger.error("Please install MGLTools or ensure BioPython and meeko are available")
-                    sys.exit(1)
+                    logger.warning(f"Required packages not available for protein preparation: {e}")
+                    logger.warning("MGLTools not found and fallback packages unavailable.")
+                    logger.info("Attempting basic PDB to PDBQT conversion as last resort...")
+                    try:
+                        _simple_pdb_to_pdbqt(protein_file, output_file)
+                        logger.info("Basic PDB to PDBQT conversion completed successfully")
+                    except Exception as e2:
+                        logger.error(f"All protein preparation methods failed: {e2}")
+                        logger.error("Please install MGLTools or ensure BioPython and meeko are available")
+                        sys.exit(1)
                 except Exception as e:
                     logger.error(f"Meeko protein preparation failed: {e}")
                     # Try simple PDB to PDBQT conversion as last resort
