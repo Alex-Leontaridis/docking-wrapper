@@ -583,10 +583,17 @@ class BatchDockingPipeline:
                         raise Exception(f"MGLTools preparation failed: {result.stderr}")
                 else:
                     # Fallback for Docker/Linux environments
-                    self.logger.info("MGLTools not found. Using simple PDB to PDBQT conversion...")
-                    self._simple_pdb_to_pdbqt(protein_file, output_file)
-                    # Skip cleaning step for simple conversion - it's already in proper format
-                    self.logger.info(f"Basic PDB to PDBQT conversion completed: {output_file}")
+                    self.logger.info("MGLTools not found. Using improved PDB to PDBQT conversion...")
+                    try:
+                        # Try to use the improved conversion from prep_structures
+                        from prep_structures import _simple_pdb_to_pdbqt
+                        _simple_pdb_to_pdbqt(protein_file, output_file)
+                        self.logger.info(f"Improved PDB to PDBQT conversion completed: {output_file}")
+                    except Exception as e:
+                        self.logger.warning(f"Improved conversion failed: {e}")
+                        self.logger.info("Falling back to simple text-based conversion...")
+                        self._simple_pdb_to_pdbqt(protein_file, output_file)
+                        self.logger.info(f"Basic PDB to PDBQT conversion completed: {output_file}")
                     return output_file
                 
                 # Clean up PDBQT formatting issues (only for MGLTools output)
@@ -651,12 +658,20 @@ class BatchDockingPipeline:
                 if line.startswith(('ATOM', 'HETATM')):
                     # Convert PDB line to basic PDBQT format
                     if len(line) >= 54:  # Minimum length for coordinates
-                        # Take only the standard PDB part (up to column 78) but remove element column
-                        # PDB format: columns 77-78 contain element symbol which we need to replace
-                        pdb_part = line[:76].rstrip()  # Stop before element column
-                        
-                        # Determine AutoDock atom type based on atom name and element
+                        # Extract atom information
+                        record_type = line[0:6].strip()
+                        atom_num = line[6:11].strip()
                         atom_name = line[12:16].strip()
+                        alt_loc = line[16:17].strip()
+                        res_name = line[17:20].strip()
+                        chain_id = line[21:22].strip()
+                        res_num = line[22:26].strip()
+                        insert_code = line[26:27].strip()
+                        x = line[30:38].strip()
+                        y = line[38:46].strip()
+                        z = line[46:54].strip()
+                        occupancy = line[54:60].strip()
+                        b_factor = line[60:66].strip()
                         element = line[76:78].strip() if len(line) > 76 else atom_name[0]
                         
                         # Map to proper AutoDock types
@@ -675,16 +690,11 @@ class BatchDockingPipeline:
                         else:
                             autodock_type = "C"  # Default to carbon
                         
-                        # Format: PDB_part + spaces + charge + space + atom_type
-                        # Ensure proper spacing to column 79
-                        padding_needed = 76 - len(pdb_part)
-                        if padding_needed > 0:
-                            pdb_part += ' ' * padding_needed
-                        
-                        # Use proper AutoDock charge format (6.3f) instead of hardcoded +0.000
-                        charge = 0.000  # Default charge, could be calculated from atom type
-                        pdbqt_line = f"{pdb_part}  {charge:>6.3f} {autodock_type}"
-                        pdbqt_lines.append(pdbqt_line + '\n')
+                        # Format PDBQT line with proper spacing
+                        # PDBQT format: ATOM/HETATM + atom_num + atom_name + res_name + chain + res_num + x + y + z + occupancy + b_factor + charge + atom_type
+                        charge = 0.000
+                        pdbqt_line = f"{record_type:<6}{atom_num:>5} {atom_name:<4}{alt_loc:>1}{res_name:>3} {chain_id:>1}{res_num:>4}{insert_code:>1}   {x:>8}{y:>8}{z:>8}{occupancy:>6}{b_factor:>6}  {charge:>6.3f} {autodock_type}\n"
+                        pdbqt_lines.append(pdbqt_line)
                 else:
                     # Skip header and other PDB-specific lines that Vina doesn't need
                     # Only keep essential structural information
