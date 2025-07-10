@@ -32,7 +32,7 @@ LOG_FILE = os.path.join(LOGS_DIR, 'docking_run.log')
 from utils.logging import setup_logging as setup_docking_logging
 
 # Create logs directory if it doesn't exist
-ensure_dir(LOGS_DIR)
+os.makedirs(LOGS_DIR, exist_ok=True)
 
 # Configure logging
 logger = setup_docking_logging(__name__)
@@ -473,7 +473,11 @@ def run_vina(protein, ligand, output_dir, box_params):
             'time': 0.0
         }
     
-    vina_out = os.path.join(output_dir, VINA_OUT, 'vina_out.pdbqt')
+    # Ensure Vina output directory exists
+    vina_output_dir = os.path.join(output_dir, VINA_OUT)
+    os.makedirs(vina_output_dir, exist_ok=True)
+    
+    vina_out = os.path.join(vina_output_dir, 'vina_out.pdbqt')
     status = {'success': False, 'error': None, 'time': None}
     start = time.time()
     try:
@@ -718,7 +722,7 @@ def run_gnina(protein, ligand, output_dir, use_gpu=False):
                 gnina_bin = [gnina_bin]
     
     gnina_out_dir = os.path.join(output_dir, GNINA_OUT)
-    ensure_dir(gnina_out_dir)
+    os.makedirs(gnina_out_dir, exist_ok=True)
     
     status = {'success': False, 'error': None, 'time': None}
     start = time.time()
@@ -767,7 +771,7 @@ def run_diffdock(protein, ligand, output_dir):
             'time': 0.0
         }
     diffdock_out_dir = os.path.join(output_dir, DIFFDOCK_OUT)
-    ensure_dir(diffdock_out_dir)
+    os.makedirs(diffdock_out_dir, exist_ok=True)
     status = {'success': False, 'error': None, 'time': None}
     start = time.time()
     
