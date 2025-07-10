@@ -218,3 +218,21 @@ docker-compose up --build
 
 Test files and example data are available in [`docs/testing/`](./testing/).
 
+---
+
+## 📄 License
+
+**All Rights Reserved**
+
+This software and its documentation are proprietary and confidential. All rights, title, and interest in and to this software, including all intellectual property rights, are and will remain the exclusive property of the original author.
+
+**No Rights Granted:**
+- No permission is granted to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of this software.
+- No permission is granted to use this software for any commercial or non-commercial purpose.
+- No permission is granted to create derivative works based on this software.
+
+**Unauthorized Use Prohibited:**
+Any unauthorized use, reproduction, or distribution of this software is strictly prohibited and may result in legal action.
+
+For permission to use this software, contact the original author directly.
+
