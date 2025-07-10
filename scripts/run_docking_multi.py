@@ -324,75 +324,81 @@ def find_binary(binary_name, env_var=None, config_path=None):
             logger.info(f"Found {other_name} in current directory: {other_path}")
             return other_path
     
-    # 2. Config path
+    # 2. Config path (if provided)
     if config_path and os.path.isfile(config_path):
-        logger.info(f"Found {binary_name} via config: {config_path}")
+        logger.info(f"Found {binary_name} in config path: {config_path}")
         return config_path
     
-    # 3. Environment variable
-    if env_var and os.environ.get(env_var):
-        env_path = os.environ[env_var]
-        if os.path.isfile(env_path):
+    # 3. Environment variable (if provided)
+    if env_var:
+        env_path = os.environ.get(env_var)
+        if env_path and os.path.isfile(env_path):
             logger.info(f"Found {binary_name} via environment variable {env_var}: {env_path}")
             return env_path
     
     # 4. PATH
-    which_path = shutil.which(binary_name)
-    if which_path:
-        logger.info(f"Found {binary_name} in PATH: {which_path}")
-        return which_path
+    path_binary = shutil.which(binary_name)
+    if path_binary:
+        # For GNINA, check if it's a working binary or has missing dependencies
+        if binary_name == 'gnina' and system == 'linux':
+            try:
+                # Test if the binary actually works
+                result = subprocess.run([path_binary, '--version'], 
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode != 0 or 'error while loading shared libraries' in result.stderr:
+                    logger.warning(f"Found GNINA in PATH but it has missing dependencies: {path_binary}")
+                    logger.warning("Will try to use local dummy script instead")
+                    # Don't return this broken binary, continue to look for local scripts
+                else:
+                    logger.info(f"Found {binary_name} in PATH: {path_binary}")
+                    return path_binary
+            except (subprocess.TimeoutExpired, OSError, FileNotFoundError):
+                logger.warning(f"Found GNINA in PATH but it's not working: {path_binary}")
+                # Don't return this broken binary, continue to look for local scripts
+        else:
+            logger.info(f"Found {binary_name} in PATH: {path_binary}")
+            return path_binary
     
-    # 5. Common Linux/Unix installation paths (NEW - this was missing!)
-    system = platform.system().lower()
-    if system in ['linux', 'darwin']:  # Linux or macOS
+    # 5. Common Linux/Unix installation paths
+    if system == 'linux':
         common_paths = [
             '/usr/local/bin',
             '/usr/bin',
-            '/opt/homebrew/bin',  # macOS Homebrew
-            '/opt/conda/bin',
-            '/opt/conda/envs/*/bin',
+            '/opt/conda/envs/docking/bin',
             os.path.expanduser('~/bin'),
-            os.path.expanduser('~/.local/bin')
         ]
-        
-        # Expand glob patterns
-        expanded_paths = []
-        for path in common_paths:
-            if '*' in path:
-                import glob
-                expanded_paths.extend(glob.glob(path))
-            else:
-                expanded_paths.append(path)
-        
-        # Check each path
-        for path in expanded_paths:
-            binary_path = os.path.join(path, binary_name)
+        for common_path in common_paths:
+            binary_path = os.path.join(common_path, binary_name)
             if os.path.isfile(binary_path) and os.access(binary_path, os.X_OK):
-                logger.info(f"Found {binary_name} in common path: {binary_path}")
+                # For GNINA, check if it's a working binary
+                if binary_name == 'gnina':
+                    try:
+                        result = subprocess.run([binary_path, '--version'], 
+                                              capture_output=True, text=True, timeout=5)
+                        if result.returncode != 0 or 'error while loading shared libraries' in result.stderr:
+                            logger.warning(f"Found GNINA in {common_path} but it has missing dependencies: {binary_path}")
+                            continue  # Skip this broken binary
+                    except (subprocess.TimeoutExpired, OSError, FileNotFoundError):
+                        logger.warning(f"Found GNINA in {common_path} but it's not working: {binary_path}")
+                        continue  # Skip this broken binary
+                
+                logger.info(f"Found {binary_name} in {common_path}: {binary_path}")
                 return binary_path
     
-    # 6. For Windows: Check WSL for Linux-only binaries
-    if platform.system().lower() == 'windows':
+    # 6. For Windows: Check WSL if binary is Linux-only (like GNINA)
+    if system == 'windows' and binary_name == 'gnina':
         try:
-            result = subprocess.run(['wsl', 'which', binary_name], 
+            result = subprocess.run(['wsl', 'which', 'gnina'], 
                                   capture_output=True, text=True, timeout=10)
             if result.returncode == 0:
                 wsl_path = result.stdout.strip()
                 if wsl_path:
-                    logger.info(f"Found {binary_name} in WSL: {wsl_path}")
-                    return f"wsl:{wsl_path}"  # Mark as WSL binary
-        except:
+                    logger.info(f"Found GNINA in WSL: wsl:{wsl_path}")
+                    return f"wsl:{wsl_path}"
+        except (subprocess.TimeoutExpired, OSError, FileNotFoundError):
             pass
     
-    # 7. For vina: try the other variant in PATH
-    if binary_name in ['vina', 'vina.exe']:
-        other_name = 'vina.exe' if binary_name == 'vina' else 'vina'
-        other_which_path = shutil.which(other_name)
-        if other_which_path:
-            logger.info(f"Found {other_name} in PATH: {other_which_path}")
-            return other_which_path
-    
-    logger.warning(f"Binary {binary_name} not found in any location")
+    logger.warning(f"Could not find {binary_name} in any of the searched locations")
     return None
 
 # Platform-specific engine availability

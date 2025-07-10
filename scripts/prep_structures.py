@@ -235,6 +235,68 @@ def _simple_pdb_to_pdbqt(pdb_file, pdbqt_file):
         logger.info(f"Improved PDB to PDBQT conversion completed: {pdbqt_file}")
     except Exception as e:
         logger.error(f"Improved PDB to PDBQT conversion failed: {e}")
+        # Fallback to simple text-based conversion
+        logger.info("Falling back to simple text-based PDB to PDBQT conversion...")
+        _simple_text_pdb_to_pdbqt(pdb_file, pdbqt_file)
+
+
+def _simple_text_pdb_to_pdbqt(pdb_file, pdbqt_file):
+    """Simple text-based PDB to PDBQT conversion as fallback."""
+    try:
+        with open(pdb_file, 'r') as f:
+            pdb_lines = f.readlines()
+        
+        pdbqt_lines = []
+        for line in pdb_lines:
+            if line.startswith(('ATOM', 'HETATM')):
+                # Convert PDB line to basic PDBQT format
+                if len(line) >= 54:  # Minimum length for coordinates
+                    # Take only the standard PDB part (up to column 78) but remove element column
+                    pdb_part = line[:76].rstrip()  # Stop before element column
+                    
+                    # Determine AutoDock atom type based on atom name and element
+                    atom_name = line[12:16].strip()
+                    element = line[76:78].strip() if len(line) > 76 else atom_name[0]
+                    
+                    # Map to proper AutoDock types
+                    if element == 'C' or atom_name.startswith('C'):
+                        autodock_type = "C"
+                    elif element == 'N' or atom_name.startswith('N'):
+                        autodock_type = "N"
+                    elif element == 'O' or atom_name.startswith('O'):
+                        autodock_type = "O"
+                    elif element == 'S' or atom_name.startswith('S'):
+                        autodock_type = "S"
+                    elif element == 'P' or atom_name.startswith('P'):
+                        autodock_type = "P"
+                    elif element == 'H' or atom_name.startswith('H'):
+                        autodock_type = "H"
+                    else:
+                        autodock_type = "C"  # Default to carbon
+                    
+                    # Format: PDB_part + spaces + charge + space + atom_type
+                    # Ensure proper spacing to column 79
+                    padding_needed = 76 - len(pdb_part)
+                    if padding_needed > 0:
+                        pdb_part += ' ' * padding_needed
+                    
+                    # Use proper AutoDock charge format (6.3f) instead of hardcoded +0.000
+                    charge = 0.000  # Default charge, could be calculated from atom type
+                    pdbqt_line = f"{pdb_part}  {charge:>6.3f} {autodock_type}"
+                    pdbqt_lines.append(pdbqt_line + '\n')
+            else:
+                # Skip header and other PDB-specific lines that Vina doesn't need
+                # Only keep essential structural information
+                if line.startswith(('REMARK', 'ROOT', 'ENDROOT', 'BRANCH', 'ENDBRANCH', 'TORSDOF')):
+                    pdbqt_lines.append(line)
+        
+        with open(pdbqt_file, 'w') as f:
+            f.writelines(pdbqt_lines)
+        
+        logger.info(f"Simple text-based PDB to PDBQT conversion completed: {pdbqt_file}")
+        
+    except Exception as e:
+        logger.error(f"Simple text-based PDB to PDBQT conversion failed: {e}")
         raise
 
 
