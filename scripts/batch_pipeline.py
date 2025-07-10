@@ -202,6 +202,58 @@ def process_single_ligand_standalone(ligand_info: Tuple[str, Path], prepared_pro
                     result['timings'][engine] = time.time() - engine_start
                     logger.error(f"{engine.upper()} failed with exception: {e}")
         
+        # Stage 3: Parse Results (if any docking was successful)
+        if any(result['stages'].get(engine, False) for engine in ['vina', 'gnina', 'diffdock']):
+            parsing_start = time.time()
+            logger.info("Stage 3: Parsing docking results")
+            
+            try:
+                # Import the parser
+                from scripts.docking_results_parser import DockingResultsParser
+                
+                # Setup parser output directory
+                parser_output_dir = Path(output_dir) / "parsed_results" / ligand_name
+                parser_output_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Parse results
+                parser = DockingResultsParser(
+                    base_dir=str(ligand_output_dir),
+                    output_dir=str(parser_output_dir)
+                )
+                summary_df = parser.generate_summary(ligand_name=ligand_name)
+                
+                if not summary_df.empty:
+                    ligand_results_dir = Path(output_dir) / "parsed_results" / ligand_name
+                    ligand_results_dir.mkdir(exist_ok=True)
+                    summary_file = ligand_results_dir / f"{ligand_name}_summary.csv"
+                    summary_df.to_csv(summary_file, index=False)
+                    
+                    if parser.failed_runs:
+                        failed_file = ligand_results_dir / f"{ligand_name}_failed.json"
+                        with open(failed_file, 'w') as f:
+                            json.dump(parser.failed_runs, f, indent=2)
+                    
+                    result['stages']['parsing'] = True
+                    result['summary_file'] = str(summary_file)
+                    result['poses_found'] = len(summary_df)
+                    
+                    logger.info(f"Parsing completed, found {len(summary_df)} poses")
+                    logger.info(f"Summary saved to: {summary_file}")
+                else:
+                    result['stages']['parsing'] = False
+                    result['errors']['parsing'] = "No poses found in results"
+                    logger.warning("Parsing completed but no poses found")
+                    return result  # Early exit
+                    
+                result['timings']['parsing'] = time.time() - parsing_start
+                
+            except Exception as e:
+                result['stages']['parsing'] = False
+                result['errors']['parsing'] = str(e)
+                result['timings']['parsing'] = time.time() - parsing_start
+                logger.error(f"Results parsing failed: {e}")
+                return result  # Early exit
+        
         # Mark as successful if at least one stage succeeded
         successful_stages = [stage for stage, success in result['stages'].items() if success]
         if successful_stages:
