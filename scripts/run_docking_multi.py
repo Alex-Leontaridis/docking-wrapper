@@ -267,7 +267,8 @@ def find_binary(binary_name, env_var=None, config_path=None):
     2. Config path (if provided)
     3. Environment variable (if provided)
     4. PATH
-    5. For Windows: Check WSL if binary is Linux-only (like GNINA)
+    5. Common Linux/Unix installation paths
+    6. For Windows: Check WSL if binary is Linux-only (like GNINA)
     Returns the path to the binary or None if not found.
     """
     import shutil
@@ -310,19 +311,50 @@ def find_binary(binary_name, env_var=None, config_path=None):
     if config_path and os.path.isfile(config_path):
         logger.info(f"Found {binary_name} via config: {config_path}")
         return config_path
+    
     # 3. Environment variable
     if env_var and os.environ.get(env_var):
         env_path = os.environ[env_var]
         if os.path.isfile(env_path):
             logger.info(f"Found {binary_name} via environment variable {env_var}: {env_path}")
             return env_path
+    
     # 4. PATH
     which_path = shutil.which(binary_name)
     if which_path:
         logger.info(f"Found {binary_name} in PATH: {which_path}")
         return which_path
     
-    # 5. For Windows: Check WSL for Linux-only binaries
+    # 5. Common Linux/Unix installation paths (NEW - this was missing!)
+    system = platform.system().lower()
+    if system in ['linux', 'darwin']:  # Linux or macOS
+        common_paths = [
+            '/usr/local/bin',
+            '/usr/bin',
+            '/opt/homebrew/bin',  # macOS Homebrew
+            '/opt/conda/bin',
+            '/opt/conda/envs/*/bin',
+            os.path.expanduser('~/bin'),
+            os.path.expanduser('~/.local/bin')
+        ]
+        
+        # Expand glob patterns
+        expanded_paths = []
+        for path in common_paths:
+            if '*' in path:
+                import glob
+                expanded_paths.extend(glob.glob(path))
+            else:
+                expanded_paths.append(path)
+        
+        # Check each path
+        for path in expanded_paths:
+            binary_path = os.path.join(path, binary_name)
+            if os.path.isfile(binary_path) and os.access(binary_path, os.X_OK):
+                logger.info(f"Found {binary_name} in common path: {binary_path}")
+                return binary_path
+    
+    # 6. For Windows: Check WSL for Linux-only binaries
     if platform.system().lower() == 'windows':
         try:
             result = subprocess.run(['wsl', 'which', binary_name], 
@@ -335,7 +367,7 @@ def find_binary(binary_name, env_var=None, config_path=None):
         except:
             pass
     
-    # 6. For vina: try the other variant in PATH
+    # 7. For vina: try the other variant in PATH
     if binary_name in ['vina', 'vina.exe']:
         other_name = 'vina.exe' if binary_name == 'vina' else 'vina'
         other_which_path = shutil.which(other_name)
@@ -446,50 +478,8 @@ def load_backend_config():
     return None
 
 def find_gnina_binary():
-    """Find GNINA binary using environment variables and platform detection."""
-    # Check environment variable first
-    gnina_path = os.environ.get('GNINA_PATH')
-    if gnina_path and os.path.isfile(gnina_path):
-        logger.info(f"Found GNINA binary from environment: {gnina_path}")
-        return gnina_path
-    
-    # Check if gnina is in PATH
-    if shutil.which('gnina'):
-        logger.info("Found GNINA binary in PATH")
-        return 'gnina'
-    
-    # Platform-specific common locations
-    system = platform.system().lower()
-    if system == 'windows':
-        possible_paths = [
-            'gnina.exe',  # In PATH
-            './gnina.exe',  # Current directory
-            './gnina.bat',  # Current directory
-            './gnina',  # Current directory
-        ]
-    elif system == 'darwin':  # macOS
-        possible_paths = [
-            '/usr/local/bin/gnina',
-            '/opt/homebrew/bin/gnina',
-            os.path.expanduser('~/gnina'),
-            './gnina',
-        ]
-    else:  # Linux
-        possible_paths = [
-            '/usr/local/bin/gnina',
-            '/usr/bin/gnina',
-            '/opt/conda/envs/docking/bin/gnina',
-            os.path.expanduser('~/gnina'),
-            './gnina',
-        ]
-    
-    for path in possible_paths:
-        if shutil.which(path):
-            logger.info(f"Found GNINA binary at: {path}")
-            return path
-    
-    logger.warning("GNINA binary not found. Please set GNINA_PATH environment variable or install GNINA.")
-    return None
+    """Find GNINA binary using the improved find_binary function."""
+    return find_binary('gnina', env_var='GNINA_PATH', config_path=getattr(config, 'gnina_path', None))
 
 def _is_dummy_diffdock_script(script_path):
     """

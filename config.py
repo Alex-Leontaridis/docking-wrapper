@@ -110,7 +110,7 @@ class Config:
             ]
         
         for path in possible_paths:
-            if shutil.which(path):
+            if os.path.isfile(path) and os.access(path, os.X_OK):
                 return path
         
         return None
@@ -155,7 +155,7 @@ class Config:
             ]
         
         for path in possible_paths:
-            if shutil.which(path):
+            if os.path.isfile(path) and os.access(path, os.X_OK):
                 return path
         
         return None
