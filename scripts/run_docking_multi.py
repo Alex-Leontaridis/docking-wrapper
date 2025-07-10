@@ -295,10 +295,18 @@ def find_binary(binary_name, env_var=None, config_path=None):
     elif system == 'linux':
         # Check for .sh files on Linux (for dummy scripts)
         base_name = os.path.splitext(binary_name)[0]  # Remove .exe if present
+        
+        # Check in current directory
         sh_path = os.path.join(cwd, f'{base_name}.sh')
         if os.path.isfile(sh_path) and os.access(sh_path, os.X_OK):
             logger.info(f"Found {base_name}.sh in current directory: {sh_path}")
             return sh_path
+        
+        # Check in bin/ subdirectory
+        bin_sh_path = os.path.join(cwd, 'bin', f'{base_name}.sh')
+        if os.path.isfile(bin_sh_path) and os.access(bin_sh_path, os.X_OK):
+            logger.info(f"Found {base_name}.sh in bin directory: {bin_sh_path}")
+            return bin_sh_path
     
     # Special case: gnina.exe or gnina in current directory
     if binary_name == 'gnina':
@@ -310,10 +318,17 @@ def find_binary(binary_name, env_var=None, config_path=None):
                     return gnina_local
         elif system == 'linux':
             for ext in ('', '.sh'):
+                # Check in current directory
                 gnina_local = os.path.join(cwd, f'gnina{ext}')
                 if os.path.isfile(gnina_local) and os.access(gnina_local, os.X_OK):
                     logger.info(f"Found gnina in current directory: {gnina_local}")
                     return gnina_local
+                
+                # Check in bin/ subdirectory
+                gnina_bin = os.path.join(cwd, 'bin', f'gnina{ext}')
+                if os.path.isfile(gnina_bin) and os.access(gnina_bin, os.X_OK):
+                    logger.info(f"Found gnina in bin directory: {gnina_bin}")
+                    return gnina_bin
     
     # Special case: vina - try both vina and vina.exe
     if binary_name in ['vina', 'vina.exe']:
