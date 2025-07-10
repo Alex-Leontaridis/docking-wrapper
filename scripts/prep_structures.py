@@ -237,7 +237,7 @@ def _simple_pdb_to_pdbqt(pdb_file, pdbqt_file):
             pdbqt_line = (
                 f"ATOM  {atom_idx:5d} {atom_name:<4} {res_name:>3} {chain_id:1}{res_num:4d}    "
                 f"{pos.x:8.3f}{pos.y:8.3f}{pos.z:8.3f}  1.00  0.00    "
-                f"{charge:>6.3f}{autodock_type}\n"
+                f"{charge:>6.3f} {autodock_type}\n"
             )
             pdbqt_lines.append(pdbqt_line)
             atom_idx += 1
