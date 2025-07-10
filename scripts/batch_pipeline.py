@@ -1548,15 +1548,33 @@ class BatchDockingPipeline:
         """Generate final aggregated summary CSV."""
         all_results = []
         
-        # Collect all individual results
+        # First try to collect from stored results
         for ligand_name, result in self.ligand_results.items():
             summary_file = result.get('summary_file')
             if summary_file and os.path.exists(summary_file):
                 try:
                     df = pd.read_csv(summary_file)
                     all_results.append(df)
+                    self.logger.info(f"Found summary for {ligand_name}: {summary_file}")
                 except Exception as e:
                     self.logger.warning(f"Failed to read summary for {ligand_name}: {e}")
+        
+        # If no results found from stored results, try to find them directly
+        if not all_results:
+            self.logger.info("No results from stored data, searching for summary files directly...")
+            parsed_results_dir = self.output_dir / "parsed_results"
+            if parsed_results_dir.exists():
+                for ligand_dir in parsed_results_dir.iterdir():
+                    if ligand_dir.is_dir():
+                        ligand_name = ligand_dir.name
+                        summary_file = ligand_dir / f"{ligand_name}_summary.csv"
+                        if summary_file.exists():
+                            try:
+                                df = pd.read_csv(summary_file)
+                                all_results.append(df)
+                                self.logger.info(f"Found summary for {ligand_name}: {summary_file}")
+                            except Exception as e:
+                                self.logger.warning(f"Failed to read summary for {ligand_name}: {e}")
         
         if all_results:
             # Combine all results
