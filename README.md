@@ -19,6 +19,33 @@ This project provides a batch molecular docking pipeline supporting AutoDock Vin
 
 Scripts will check for these binaries at startup and exit with a clear error if not found.
 
+
+### Making GNINA Executable
+
+After downloading GNINA, you may need to make it executable:
+
+```bash
+# Make gnina executable (Linux/macOS)
+chmod +x /path/to/gnina
+
+# Or if using the project's bin directory
+chmod +x bin/gnina
+```
+
+### Fixing Output Directory Permissions
+
+If you encounter permission errors with DiffDock or other output directories:
+
+```bash
+# Navigate to your project directory
+cd ~/Desktop/docking-wrapper
+
+# Fix permissions for the output directory
+chmod -R 755 test_bug_fix_outputs/
+
+# Make sure the user has write permissions
+chmod -R u+w test_bug_fix_outputs/
+```
 ---
 
 ## CLI Usage
