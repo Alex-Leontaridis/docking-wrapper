@@ -692,8 +692,8 @@ class BatchDockingPipeline:
                         
                         # Format PDBQT line with proper spacing
                         # PDBQT format: ATOM/HETATM + atom_num + atom_name + res_name + chain + res_num + x + y + z + occupancy + b_factor + charge + atom_type
-                        charge = 0.000
-                        pdbqt_line = f"{record_type:<6}{atom_num:>5} {atom_name:<4}{alt_loc:>1}{res_name:>3} {chain_id:>1}{res_num:>4}{insert_code:>1}   {x:>8}{y:>8}{z:>8}{occupancy:>6}{b_factor:>6}  {charge:>6.3f} {autodock_type}\n"
+                        charge = 0.001  # Use small non-zero charge to avoid problematic 0.000 pattern
+                        pdbqt_line = f"{record_type:<6}{atom_num:>5} {atom_name:<4}{alt_loc:>1}{res_name:>3} {chain_id:>1}{res_num:>4}{insert_code:>1}   {x:>8}{y:>8}{z:>8}  1.00  0.00    {charge:>6.3f} {autodock_type}\n"
                         pdbqt_lines.append(pdbqt_line)
                 else:
                     # Skip header and other PDB-specific lines that Vina doesn't need

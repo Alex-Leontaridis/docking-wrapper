@@ -53,8 +53,8 @@ END"""
             for i, line in enumerate(atom_lines):
                 print(f"Line {i+1}: {line.strip()}")
                 
-                # Check for the problematic format
-                if '0.000 N' in line or '0.000 C' in line or '0.000 O' in line:
+                # Check for the problematic format (specifically the space between 0.000 and atom type)
+                if ' 0.000 N' in line or ' 0.000 C' in line or ' 0.000 O' in line:
                     print(f"   ❌ Found problematic format!")
                     return False
                 
@@ -134,8 +134,8 @@ END"""
             for i, line in enumerate(atom_lines):
                 print(f"Line {i+1}: {line.strip()}")
                 
-                # Check for the problematic format
-                if '0.000 N' in line or '0.000 C' in line or '0.000 O' in line:
+                # Check for the problematic format (specifically the space between 0.000 and atom type)
+                if ' 0.000 N' in line or ' 0.000 C' in line or ' 0.000 O' in line:
                     print(f"   ❌ Found problematic format!")
                     return False
                 

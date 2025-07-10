@@ -6,8 +6,6 @@ import logging
 import subprocess
 import shutil
 import numpy as np
-from rdkit import Chem
-from rdkit.Chem import AllChem
 
 # Add current directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,6 +19,15 @@ ensure_dir('logs')
 
 # Configure logging
 logger = setup_docking_logging(__name__)
+
+# Conditional RDKit imports
+try:
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+    RDKIT_AVAILABLE = True
+except ImportError:
+    RDKIT_AVAILABLE = False
+    logger.warning("RDKit not available - will use text-based PDB to PDBQT conversion")
 
 # Import config after logging is set up
 from config import config
@@ -182,6 +189,11 @@ def _clean_pdbqt_formatting_fallback(pdbqt_file):
 
 def _simple_pdb_to_pdbqt(pdb_file, pdbqt_file):
     """Improved PDB to PDBQT conversion using RDKit for atom typing and Gasteiger charge calculation."""
+    if not RDKIT_AVAILABLE:
+        logger.info("RDKit not available, using text-based PDB to PDBQT conversion...")
+        _simple_text_pdb_to_pdbqt(pdb_file, pdbqt_file)
+        return
+        
     try:
         # Load the PDB file as an RDKit molecule
         mol = Chem.MolFromPDBFile(pdb_file, removeHs=False)
@@ -225,7 +237,7 @@ def _simple_pdb_to_pdbqt(pdb_file, pdbqt_file):
             pdbqt_line = (
                 f"ATOM  {atom_idx:5d} {atom_name:<4} {res_name:>3} {chain_id:1}{res_num:4d}    "
                 f"{pos.x:8.3f}{pos.y:8.3f}{pos.z:8.3f}  1.00  0.00    "
-                f"{charge:>6.3f} {autodock_type}\n"
+                f"{charge:>6.3f}{autodock_type}\n"
             )
             pdbqt_lines.append(pdbqt_line)
             atom_idx += 1
@@ -285,8 +297,8 @@ def _simple_text_pdb_to_pdbqt(pdb_file, pdbqt_file):
                     
                     # Format PDBQT line with proper spacing
                     # PDBQT format: ATOM/HETATM + atom_num + atom_name + res_name + chain + res_num + x + y + z + occupancy + b_factor + charge + atom_type
-                    charge = 0.000
-                    pdbqt_line = f"{record_type:<6}{atom_num:>5} {atom_name:<4}{alt_loc:>1}{res_name:>3} {chain_id:>1}{res_num:>4}{insert_code:>1}   {x:>8}{y:>8}{z:>8}{occupancy:>6}{b_factor:>6}  {charge:>6.3f} {autodock_type}\n"
+                    charge = 0.001  # Use small non-zero charge to avoid problematic 0.000 pattern
+                    pdbqt_line = f"{record_type:<6}{atom_num:>5} {atom_name:<4}{alt_loc:>1}{res_name:>3} {chain_id:>1}{res_num:>4}{insert_code:>1}   {x:>8}{y:>8}{z:>8}  1.00  0.00    {charge:>6.3f} {autodock_type}\n"
                     pdbqt_lines.append(pdbqt_line)
             else:
                 # Skip header and other PDB-specific lines that Vina doesn't need

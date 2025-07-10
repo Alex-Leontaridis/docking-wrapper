@@ -14,8 +14,20 @@ from utils.logging import setup_logging, log_startup, log_shutdown, log_error_wi
 import pandas as pd
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-from rdkit import Chem
-from rdkit.Chem import AllChem
+# Conditional RDKit imports
+try:
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+    RDKIT_AVAILABLE = True
+except ImportError:
+    RDKIT_AVAILABLE = False
+    # Create dummy classes for when RDKit is not available
+    class Chem:
+        @staticmethod
+        def MolFromPDBFile(*args, **kwargs):
+            return None
+    class AllChem:
+        pass
 
 class DockingResultsParser:
     """Parser for docking engine output files."""
