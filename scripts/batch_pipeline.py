@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import path manager and logging
 from utils.path_manager import get_path_manager, get_path, get_absolute_path, ensure_dir
-from utils.logging import setup_logging, log_startup, log_shutdown, log_error_with_context, setup_global_error_handler
+from utils.logging import setup_logging, log_startup, log_shutdown, log_error_with_context, setup_global_error_handler, DockingLogger
 
 # Pretty output helpers
 try:
@@ -286,6 +286,11 @@ class BatchDockingPipeline:
         self.logger = setup_logging('BatchPipeline')
         log_startup('BatchDockingPipeline', '1.0.0')
         
+        # Create individual tool loggers
+        self.vina_logger = setup_logging('Vina', auto_log_file=False)
+        self.gnina_logger = setup_logging('Gnina', auto_log_file=False)
+        self.diffdock_logger = setup_logging('DiffDock', auto_log_file=False)
+        
         # Set output directory
         if output_dir:
             self.output_dir = Path(output_dir)
@@ -451,6 +456,48 @@ class BatchDockingPipeline:
         
         for dir_name in base_dirs:
             (self.output_dir / dir_name).mkdir(exist_ok=True)
+    
+    def _setup_ligand_logging(self, ligand_name: str) -> Dict[str, DockingLogger]:
+        """Setup individual tool loggers for a specific ligand."""
+        ligand_log_dir = self.output_dir / "docking_results" / ligand_name / "logs"
+        ligand_log_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create individual tool loggers with specific log files
+        tool_loggers = {}
+        
+        # Vina logger
+        vina_log_file = ligand_log_dir / "vina.log"
+        tool_loggers['vina'] = setup_logging(
+            f'Vina_{ligand_name}', 
+            str(vina_log_file),
+            auto_log_file=False
+        )
+        
+        # Gnina logger
+        gnina_log_file = ligand_log_dir / "gnina.log"
+        tool_loggers['gnina'] = setup_logging(
+            f'Gnina_{ligand_name}', 
+            str(gnina_log_file),
+            auto_log_file=False
+        )
+        
+        # DiffDock logger
+        diffdock_log_file = ligand_log_dir / "diffdock.log"
+        tool_loggers['diffdock'] = setup_logging(
+            f'DiffDock_{ligand_name}', 
+            str(diffdock_log_file),
+            auto_log_file=False
+        )
+        
+        # Parsing logger
+        parsing_log_file = ligand_log_dir / "parsing.log"
+        tool_loggers['parsing'] = setup_logging(
+            f'Parsing_{ligand_name}', 
+            str(parsing_log_file),
+            auto_log_file=False
+        )
+        
+        return tool_loggers
     
     def discover_ligands(self, ligand_input: str) -> List[Tuple[str, Path]]:
         """
@@ -670,6 +717,9 @@ class BatchDockingPipeline:
                 self.logger.info(f"Processing ligand: {ligand_name}")
                 ligand_output_dir = self.output_dir / "docking_results" / ligand_name
                 ligand_output_dir.mkdir(exist_ok=True)
+                
+                # Setup individual tool loggers for this ligand
+                tool_loggers = self._setup_ligand_logging(ligand_name)
             
             # Stage 1: Ligand preparation
             self.logger.subsection(f"Stage 1: Preparing ligand structure")
@@ -745,25 +795,59 @@ class BatchDockingPipeline:
                     self.logger.info(f"[{ligand_name}] Running {engine.upper()} docking")
                     try:
                         if engine == "vina":
+                            # Log to individual vina log file
+                            tool_loggers['vina'].info(f"Starting VINA docking for {ligand_name}")
+                            tool_loggers['vina'].info(f"Protein: {prepared_protein}")
+                            tool_loggers['vina'].info(f"Ligand: {prepared_ligand}")
+                            tool_loggers['vina'].info(f"Box parameters: {box_params}")
+                            
                             status = run_vina(
                                 prepared_protein, 
                                 str(prepared_ligand), 
                                 str(ligand_output_dir), 
                                 box_params
                             )
+                            
+                            if status['success']:
+                                tool_loggers['vina'].info(f"VINA docking completed successfully in {status.get('time', 0):.2f}s")
+                            else:
+                                tool_loggers['vina'].error(f"VINA docking failed: {status.get('error', 'Unknown error')}")
+                                
                         elif engine == "gnina":
+                            # Log to individual gnina log file
+                            tool_loggers['gnina'].info(f"Starting GNINA docking for {ligand_name}")
+                            tool_loggers['gnina'].info(f"Protein: {prepared_protein}")
+                            tool_loggers['gnina'].info(f"Ligand: {prepared_ligand}")
+                            tool_loggers['gnina'].info(f"GPU enabled: {self.config['engines']['gnina']['use_gpu']}")
+                            
                             status = run_gnina(
                                 prepared_protein, 
                                 str(prepared_ligand), 
                                 str(ligand_output_dir),
                                 self.config["engines"]["gnina"]["use_gpu"]
                             )
+                            
+                            if status['success']:
+                                tool_loggers['gnina'].info(f"GNINA docking completed successfully in {status.get('time', 0):.2f}s")
+                            else:
+                                tool_loggers['gnina'].error(f"GNINA docking failed: {status.get('error', 'Unknown error')}")
+                                
                         elif engine == "diffdock":
+                            # Log to individual diffdock log file
+                            tool_loggers['diffdock'].info(f"Starting DiffDock docking for {ligand_name}")
+                            tool_loggers['diffdock'].info(f"Protein: {prepared_protein}")
+                            tool_loggers['diffdock'].info(f"Ligand: {prepared_ligand}")
+                            
                             status = run_diffdock(
                                 prepared_protein, 
                                 str(prepared_ligand), 
                                 str(ligand_output_dir)
                             )
+                            
+                            if status['success']:
+                                tool_loggers['diffdock'].info(f"DiffDock docking completed successfully in {status.get('time', 0):.2f}s")
+                            else:
+                                tool_loggers['diffdock'].error(f"DiffDock docking failed: {status.get('error', 'Unknown error')}")
                         
                         result['timings'][engine] = time.time() - engine_start
                         
@@ -1093,6 +1177,10 @@ class BatchDockingPipeline:
                 self.logger.info(f"[{ligand_name}] Stage 7: Parsing traditional docking results")
                 parsing_start = time.time()
                 try:
+                    # Log to individual parsing log file
+                    tool_loggers['parsing'].info(f"Starting results parsing for {ligand_name}")
+                    tool_loggers['parsing'].info(f"Output directory: {ligand_output_dir}")
+                    
                     parser_output_dir = self.output_dir / "parsed_results" / ligand_name
                     parser_output_dir.mkdir(parents=True, exist_ok=True)
                     parser = DockingResultsParser(
@@ -1112,10 +1200,19 @@ class BatchDockingPipeline:
                         result['stages']['parsing'] = True
                         result['summary_file'] = str(summary_file)
                         result['poses_found'] = len(summary_df)
+                        
+                        # Log parsing results to individual log
+                        tool_loggers['parsing'].info(f"Parsing completed successfully")
+                        tool_loggers['parsing'].info(f"Found {len(summary_df)} poses")
+                        tool_loggers['parsing'].info(f"Summary saved to: {summary_file}")
+                        if parser.failed_runs:
+                            tool_loggers['parsing'].warning(f"Failed runs: {len(parser.failed_runs)}")
+                        
                         self.logger.info(f"[{ligand_name}] Parsing completed, found {len(summary_df)} poses")
                     else:
                         result['stages']['parsing'] = False
                         result['errors']['parsing'] = "No poses found in results"
+                        tool_loggers['parsing'].warning("No poses found in results")
                         self.logger.warning(f"[{ligand_name}] Parsing completed but no poses found")
                         return result  # Early exit
                     result['timings']['parsing'] = time.time() - parsing_start
@@ -1123,6 +1220,7 @@ class BatchDockingPipeline:
                     result['stages']['parsing'] = False
                     result['errors']['parsing'] = str(e)
                     result['timings']['parsing'] = time.time() - parsing_start
+                    tool_loggers['parsing'].error(f"Results parsing failed: {e}")
                     self.logger.error(f"[{ligand_name}] Results parsing failed: {e}")
                     return result  # Early exit
             

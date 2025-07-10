@@ -46,7 +46,19 @@ class PathManager:
             current = current.parent
         
         # Fallback to current working directory
-        return Path.cwd()
+        cwd = Path.cwd()
+        
+        # Check if current working directory looks like the project root
+        if (cwd / "scripts" / "batch_pipeline.py").exists():
+            return cwd
+        if (cwd / "utils" / "path_manager.py").exists():
+            return cwd
+        if (cwd / "config.py").exists():
+            return cwd
+        
+        # If we still can't find it, use current working directory but warn
+        print(f"Warning: Could not determine project root. Using current directory: {cwd}")
+        return cwd
     
     def _get_default_config_path(self) -> Path:
         """Get the default configuration file path."""
@@ -60,6 +72,13 @@ class PathManager:
             try:
                 with open(self.config_file, 'r') as f:
                     config_paths = json.load(f)
+                
+                # Check if config contains empty strings and clean them up
+                if self._has_empty_paths(config_paths):
+                    print("Warning: Found empty paths in config file. Regenerating with current paths.")
+                    self._save_paths(default_paths)
+                    return default_paths
+                
                 # Merge with defaults
                 return self._merge_paths(default_paths, config_paths)
             except Exception as e:
@@ -301,9 +320,22 @@ class PathManager:
             if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
                 merged[key] = self._merge_paths(merged[key], value)
             else:
-                merged[key] = value
+                # Only use config value if it's not empty and not None
+                if value and value != "":
+                    merged[key] = value
+                # For empty strings or None values, keep the default
         
         return merged
+    
+    def _has_empty_paths(self, config: Dict[str, Any]) -> bool:
+        """Check if config contains empty string paths."""
+        for key, value in config.items():
+            if isinstance(value, dict):
+                if self._has_empty_paths(value):
+                    return True
+            elif isinstance(value, str) and value == "":
+                return True
+        return False
     
     def _save_paths(self, paths: Dict[str, Any]):
         """Save paths to configuration file."""
@@ -322,10 +354,18 @@ class PathManager:
             ("utils", "Utils directory"),
         ]
         
+        missing_paths = []
         for path_key, description in critical_paths:
             path = self.get_path(path_key)
             if not path or not os.path.exists(path):
-                print(f"Warning: {description} not found: {path}")
+                missing_paths.append(f"{description} not found: {path}")
+        
+        if missing_paths:
+            print("Warning: Some critical directories are missing:")
+            for missing in missing_paths:
+                print(f"  - {missing}")
+            print("The script will attempt to continue, but some features may not work properly.")
+            print("Make sure you're running the script from the project root directory.")
     
     def get_path(self, path_key: str, sub_key: Optional[str] = None) -> Optional[str]:
         """
