@@ -457,9 +457,20 @@ def prepare_ligand_single(ligand_file, output_file):
 def convert_ligand_to_pdbqt(mol, pdbqt_file):
     if MEEKO_AVAILABLE:
         try:
-            # Updated Meeko API - use the new interface only
+            # Updated Meeko API - use the new interface
             prep = MoleculePreparation()
-            pdbqt_str = prep.write_string(mol)
+            # Check if the molecule has the required attributes
+            if not hasattr(mol, 'GetNumAtoms') or mol.GetNumAtoms() == 0:
+                raise ValueError("Invalid molecule for Meeko conversion")
+            
+            # Try the new API first
+            try:
+                pdbqt_str = prep.write_string(mol)
+            except AttributeError:
+                # Fallback to older API if write_string doesn't exist
+                prep.prepare(mol)
+                pdbqt_str = prep.write_pdbqt_string()
+            
             with open(pdbqt_file, 'w') as f:
                 f.write(pdbqt_str)
             logger.info(f"Ligand converted and saved as: {pdbqt_file}")

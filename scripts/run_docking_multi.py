@@ -276,27 +276,44 @@ def find_binary(binary_name, env_var=None, config_path=None):
     import platform
     
     cwd = os.getcwd()
+    system = platform.system().lower()
+    
     # 1. Current working directory (highest priority for local binaries)
     local_path = os.path.join(cwd, binary_name)
     if os.path.isfile(local_path):
         logger.info(f"Found {binary_name} in current directory: {local_path}")
         return local_path
     
-    # Check for .bat files on Windows (for dummy scripts)
-    if platform.system().lower() == 'windows':
+    # Check for platform-specific extensions in current directory
+    if system == 'windows':
+        # Check for .bat files on Windows (for dummy scripts)
         base_name = os.path.splitext(binary_name)[0]  # Remove .exe if present
         bat_path = os.path.join(cwd, f'{base_name}.bat')
         if os.path.isfile(bat_path):
             logger.info(f"Found {base_name}.bat in current directory: {bat_path}")
             return bat_path
+    elif system == 'linux':
+        # Check for .sh files on Linux (for dummy scripts)
+        base_name = os.path.splitext(binary_name)[0]  # Remove .exe if present
+        sh_path = os.path.join(cwd, f'{base_name}.sh')
+        if os.path.isfile(sh_path) and os.access(sh_path, os.X_OK):
+            logger.info(f"Found {base_name}.sh in current directory: {sh_path}")
+            return sh_path
     
     # Special case: gnina.exe or gnina in current directory
     if binary_name == 'gnina':
-        for ext in ('', '.exe', '.bat'):
-            gnina_local = os.path.join(cwd, f'gnina{ext}')
-            if os.path.isfile(gnina_local):
-                logger.info(f"Found gnina in current directory: {gnina_local}")
-                return gnina_local
+        if system == 'windows':
+            for ext in ('', '.exe', '.bat'):
+                gnina_local = os.path.join(cwd, f'gnina{ext}')
+                if os.path.isfile(gnina_local):
+                    logger.info(f"Found gnina in current directory: {gnina_local}")
+                    return gnina_local
+        elif system == 'linux':
+            for ext in ('', '.sh'):
+                gnina_local = os.path.join(cwd, f'gnina{ext}')
+                if os.path.isfile(gnina_local) and os.access(gnina_local, os.X_OK):
+                    logger.info(f"Found gnina in current directory: {gnina_local}")
+                    return gnina_local
     
     # Special case: vina - try both vina and vina.exe
     if binary_name in ['vina', 'vina.exe']:

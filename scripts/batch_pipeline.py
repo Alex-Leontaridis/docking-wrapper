@@ -655,19 +655,22 @@ class BatchDockingPipeline:
                         # PDB format: columns 77-78 contain element symbol which we need to replace
                         pdb_part = line[:76].rstrip()  # Stop before element column
                         
-                        # Determine AutoDock atom type based on atom name
+                        # Determine AutoDock atom type based on atom name and element
                         atom_name = line[12:16].strip()
-                        if atom_name.startswith('C'):
+                        element = line[76:78].strip() if len(line) > 76 else atom_name[0]
+                        
+                        # Map to proper AutoDock types
+                        if element == 'C' or atom_name.startswith('C'):
                             autodock_type = "C"
-                        elif atom_name.startswith('N'):
+                        elif element == 'N' or atom_name.startswith('N'):
                             autodock_type = "N"
-                        elif atom_name.startswith('O'):
+                        elif element == 'O' or atom_name.startswith('O'):
                             autodock_type = "O"
-                        elif atom_name.startswith('S'):
+                        elif element == 'S' or atom_name.startswith('S'):
                             autodock_type = "S"
-                        elif atom_name.startswith('P'):
+                        elif element == 'P' or atom_name.startswith('P'):
                             autodock_type = "P"
-                        elif atom_name.startswith('H'):
+                        elif element == 'H' or atom_name.startswith('H'):
                             autodock_type = "H"
                         else:
                             autodock_type = "C"  # Default to carbon
