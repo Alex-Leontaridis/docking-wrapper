@@ -1,0 +1,276 @@
+version: '3.8'
+
+services:
+  # Main application service
+  docking-wrapper:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.enhanced
+      target: production
+    image: convexia/docking-wrapper:latest
+    container_name: docking-wrapper-app
+    restart: unless-stopped
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=INFO
+      - MAX_WORKERS=4
+    volumes:
+      - ../inputs:/app/inputs:ro
+      - ../outputs:/app/outputs
+      - ../logs:/app/logs
+      - ../config:/app/config:ro
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - docking-network
+
+  # Development service
+  docking-wrapper-dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.enhanced
+      target: dev
+    image: convexia/docking-wrapper:dev
+    container_name: docking-wrapper-dev
+    restart: unless-stopped
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=DEBUG
+      - MAX_WORKERS=2
+    volumes:
+      - ../:/app
+      - ../inputs:/app/inputs:ro
+      - ../outputs:/app/outputs
+      - ../logs:/app/logs
+      - ../config:/app/config:ro
+    ports:
+      - "8001:8000"
+    command: ["python", "-m", "pytest", "tests/", "-v"]
+    networks:
+      - docking-network
+
+  # GPU-enabled service
+  docking-wrapper-gpu:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.enhanced
+      target: gpu
+    image: convexia/docking-wrapper:gpu
+    container_name: docking-wrapper-gpu
+    restart: unless-stopped
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=INFO
+      - MAX_WORKERS=2
+      - CUDA_VISIBLE_DEVICES=0
+    volumes:
+      - ../inputs:/app/inputs:ro
+      - ../outputs:/app/outputs
+      - ../logs:/app/logs
+      - ../config:/app/config:ro
+    ports:
+      - "8002:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - docking-network
+
+  # Minimal service (Vina only)
+  docking-wrapper-minimal:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.minimal
+    image: convexia/docking-wrapper:minimal
+    container_name: docking-wrapper-minimal
+    restart: unless-stopped
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=INFO
+      - MAX_WORKERS=2
+    volumes:
+      - ../inputs:/app/inputs:ro
+      - ../outputs:/app/outputs
+      - ../logs:/app/logs
+    ports:
+      - "8003:8000"
+    networks:
+      - docking-network
+
+  # Jupyter service for interactive development
+  jupyter:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.enhanced
+      target: dev
+    image: convexia/docking-wrapper:jupyter
+    container_name: docking-wrapper-jupyter
+    restart: unless-stopped
+    environment:
+      - PYTHONPATH=/app
+      - JUPYTER_ENABLE_LAB=yes
+      - JUPYTER_TOKEN=docking123
+    volumes:
+      - ../:/app
+      - ../inputs:/app/inputs:ro
+      - ../outputs:/app/outputs
+      - ../logs:/app/logs
+    ports:
+      - "8888:8888"
+    command: ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root"]
+    networks:
+      - docking-network
+
+  # Redis for caching and job queue
+  redis:
+    image: redis:7-alpine
+    container_name: docking-wrapper-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - docking-network
+
+  # PostgreSQL for results storage
+  postgres:
+    image: postgres:15-alpine
+    container_name: docking-wrapper-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=docking_results
+      - POSTGRES_USER=docking_user
+      - POSTGRES_PASSWORD=docking_pass
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - docking-network
+
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: docking-wrapper-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - docking-wrapper
+    networks:
+      - docking-network
+
+  # Monitoring with Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: docking-wrapper-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - docking-network
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: docking-wrapper-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - docking-network
+
+  # Celery worker for background tasks
+  celery-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.enhanced
+      target: production
+    image: convexia/docking-wrapper:worker
+    container_name: docking-wrapper-worker
+    restart: unless-stopped
+    environment:
+      - PYTHONPATH=/app
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - ../inputs:/app/inputs:ro
+      - ../outputs:/app/outputs
+      - ../logs:/app/logs
+    command: ["celery", "-A", "scripts.celery_app", "worker", "--loglevel=info"]
+    depends_on:
+      - redis
+    networks:
+      - docking-network
+
+  # Celery beat for scheduled tasks
+  celery-beat:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.enhanced
+      target: production
+    image: convexia/docking-wrapper:beat
+    container_name: docking-wrapper-beat
+    restart: unless-stopped
+    environment:
+      - PYTHONPATH=/app
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - ../inputs:/app/inputs:ro
+      - ../outputs:/app/outputs
+      - ../logs:/app/logs
+    command: ["celery", "-A", "scripts.celery_app", "beat", "--loglevel=info"]
+    depends_on:
+      - redis
+    networks:
+      - docking-network
+
+volumes:
+  redis-data:
+    driver: local
+  postgres-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  docking-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16 
