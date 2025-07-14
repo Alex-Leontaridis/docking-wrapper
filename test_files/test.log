@@ -1,3 +1,0 @@
-2025-07-08 11:30:06,523 | INFO     | TestLogger           | logging.py:145 | Test info message
-2025-07-08 11:30:06,524 | ERROR    | TestLogger           | logging.py:156 | [FILE_NOT_FOUND] Test error message
-2025-07-08 11:30:06,524 | WARNING  | TestLogger           | logging.py:149 | Test warning message

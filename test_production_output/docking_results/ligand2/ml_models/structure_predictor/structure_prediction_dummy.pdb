@@ -1,6 +1,0 @@
-# Dummy structure prediction output
-# All structure prediction tools (ColabFold, OpenFold, ESMFold) are not installed
-# To install: pip install colabfold openfold esm
-
-# Dummy protein structure
-# This is a placeholder - real structure prediction requires proper tool installation

@@ -1,2 +1,0 @@
-complex_name,confidence
-ligand,0.85

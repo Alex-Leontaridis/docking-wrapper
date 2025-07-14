@@ -1,2 +1,0 @@
-ligand_name,method,affinity_kcal_mol,rmsd_lb,rmsd_ub,RMSD,pose_rank,pose_path,model_number
-ligand1,Vina,-4.145,,,,1,test_batch_outputs\docking_results\ligand1\vina_output\vina_out.pdbqt,

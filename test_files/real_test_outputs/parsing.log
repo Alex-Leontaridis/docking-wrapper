@@ -1,7 +1,0 @@
-2025-07-05 02:11:24,226 - INFO - Starting results parsing...
-2025-07-05 02:11:24,226 - INFO - Parsed 1 Vina poses from vina_output\vina_out.pdbqt
-2025-07-05 02:11:24,227 - INFO - Parsed 0 GNINA poses
-2025-07-05 02:11:24,229 - WARNING - Failed to parse confidence file diffdock_output\diffdock_confidence.txt: could not convert string to float: 'complex_name,confidence'
-2025-07-05 02:11:24,229 - INFO - Parsed 0 DiffDock poses
-2025-07-05 02:11:24,230 - INFO - Generated summary with 1 total poses
-2025-07-05 02:11:24,232 - INFO - Results saved to: real_test_outputs\summary.csv

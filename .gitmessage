@@ -1,0 +1,44 @@
+# Commit Message Template
+# 
+# Follow the conventional commit format:
+# <type>(<scope>): <description>
+#
+# Types:
+#   feat     - New feature
+#   fix      - Bug fix
+#   docs     - Documentation changes
+#   style    - Code style changes (formatting, etc.)
+#   refactor - Code refactoring
+#   test     - Adding or updating tests
+#   chore    - Maintenance tasks
+#
+# Scope (optional):
+#   - Use lowercase
+#   - No spaces
+#   - Examples: equibind, gnina, vina, api, ui, docker
+#
+# Description:
+#   - Use imperative mood ("add" not "added")
+#   - Max 72 characters
+#   - No period at the end
+#
+# Examples:
+#   feat(equibind): add model integration
+#   fix(gnina): resolve memory leak in batch processing
+#   docs(api): update API documentation
+#   test(vina): add unit tests for docking engine
+#   chore(docker): update base image version
+
+<type>(<scope>): <description>
+
+# Optional: Add a longer description after a blank line
+# 
+# - Bullet points for details
+# - Explain why the change was made
+# - Reference related issues
+
+# Optional: Add footer for issue references
+# 
+# Closes #123
+# Fixes #456
+# Related to #789 

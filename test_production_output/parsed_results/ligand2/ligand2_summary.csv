@@ -1,9 +1,0 @@
-ligand_name,engine,pose_id,affinity_kcal_per_mol,confidence_score,pose_file,status
-ligand2,vina,1,-7.234,,test_production_output\docking_results\ligand2\vina_output\vina_out.pdbqt,success
-ligand2,vina,2,-6.891,,test_production_output\docking_results\ligand2\vina_output\vina_out.pdbqt,success
-ligand2,vina,3,-6.445,,test_production_output\docking_results\ligand2\vina_output\vina_out.pdbqt,success
-ligand2,gnina,1,,,test_production_output\docking_results\ligand2\gnina_output\gnina_out.sdf,success
-ligand2,diffdock,1,,0.85,test_production_output\docking_results\ligand2\diffdock_output\diffdock_out.sdf,success
-ligand2,diffdock,2,,0.72,test_production_output\docking_results\ligand2\diffdock_output\pose_1.sdf,success
-ligand2,diffdock,3,,0.68,test_production_output\docking_results\ligand2\diffdock_output\pose_2.sdf,success
-ligand2,diffdock,4,,,test_production_output\docking_results\ligand2\diffdock_output\pose_3.sdf,success
