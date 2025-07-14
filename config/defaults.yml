@@ -1,0 +1,7 @@
+vina_path: /usr/local/bin/vina
+mgltools_path: /usr/local/MGLTools
+gnina_path: /usr/local/bin/gnina
+diffdock_path: /usr/local/bin/diffdock
+output_dir: ./output
+exhaustiveness: 8
+num_poses: 10 

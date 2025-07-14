@@ -54,3 +54,6 @@ flake8>=5.0.0
 mypy>=0.991
 
 # Placeholder for Boltz2 model dependencies (add here if/when available) 
+structlog
+prometheus_client
+sentry-sdk 

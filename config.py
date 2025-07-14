@@ -12,6 +12,9 @@ import logging
 from utils.logging import setup_logging, log_startup, log_shutdown, log_error_with_context
 from pathlib import Path
 from typing import Optional, Dict, Any
+import yaml
+import argparse
+from core.config_model import AppConfig
 
 class Config:
     """Centralized configuration for external tools and paths."""
@@ -231,3 +234,36 @@ class Config:
 # Global configuration instance
 config = Config()
 DockingConfig = Config 
+
+def load_config(defaults_path="config/defaults.yml", config_path=None, cli_args=None):
+    # 1. Load defaults
+    with open(defaults_path, "r") as f:
+        defaults = yaml.safe_load(f)
+
+    # 2. Load config file (if provided)
+    config = defaults.copy()
+    if config_path:
+        with open(config_path, "r") as f:
+            user_config = yaml.safe_load(f)
+        config.update(user_config)
+
+    # 3. Override with CLI args (if provided)
+    if cli_args:
+        for k, v in vars(cli_args).items():
+            if v is not None and k != "config":
+                config[k] = v
+
+    # 4. Use Pydantic for validation and env var substitution
+    return AppConfig(**config)
+
+def parse_cli_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--vina_path", type=str)
+    parser.add_argument("--mgltools_path", type=str)
+    parser.add_argument("--gnina_path", type=str)
+    parser.add_argument("--diffdock_path", type=str)
+    parser.add_argument("--output_dir", type=str)
+    parser.add_argument("--exhaustiveness", type=int)
+    parser.add_argument("--num_poses", type=int)
+    parser.add_argument("--config", type=str, help="Path to custom config YAML")
+    return parser.parse_args() 

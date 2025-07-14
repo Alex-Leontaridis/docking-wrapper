@@ -6,6 +6,7 @@ Provides consistent logging across all modules with standardized formats,
 error codes, and configuration options. Integrates with path management.
 """
 
+import structlog
 import logging
 import sys
 import os
@@ -276,54 +277,27 @@ class DockingLogger:
         getattr(self, level)(message)
 
 
-def setup_logging(name: str = 'DockingWrapper',
-                 log_file: Optional[str] = None,
-                 level: str = 'INFO',
-                 max_file_size_mb: int = 100,
-                 backup_count: int = 5,
-                 console_output: bool = True,
-                 detailed_format: bool = True,
-                 auto_log_file: bool = True) -> DockingLogger:
-    """
-    Setup centralized logging.
-    
-    Args:
-        name: Logger name
-        log_file: Path to log file (optional)
-        level: Logging level
-        max_file_size_mb: Maximum log file size in MB
-        backup_count: Number of backup files to keep
-        console_output: Whether to output to console
-        detailed_format: Whether to use detailed formatting
-        auto_log_file: Whether to automatically create log file if not provided
-    
-    Returns:
-        Configured DockingLogger instance
-    """
-    # Auto-create log file if requested and not provided
-    if auto_log_file and not log_file:
-        try:
-            path_manager_func = _get_path_manager()
-            if path_manager_func:
-                path_manager = path_manager_func()
-                log_dir = path_manager.ensure_dir("logs")
-                if log_dir:
-                    timestamp = time.strftime("%Y%m%d_%H%M%S")
-                    log_file = str(log_dir / f"{name}_{timestamp}.log")
-        except Exception:
-            # Fallback to current directory
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            log_file = f"{name}_{timestamp}.log"
-    
-    return DockingLogger(
-        name=name,
-        log_file=log_file,
-        level=level,
-        max_file_size_mb=max_file_size_mb,
-        backup_count=backup_count,
-        console_output=console_output,
-        detailed_format=detailed_format
+def setup_logging():
+    logging.basicConfig(
+        format="%(message)s",
+        stream=sys.stdout,
+        level=logging.INFO,
     )
+    structlog.configure(
+        processors=[
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.add_logger_name,
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
+            structlog.processors.JSONRenderer(),
+        ],
+        context_class=dict,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
+    )
+    return structlog.get_logger()
 
 
 def get_logger(name: str = None) -> DockingLogger:

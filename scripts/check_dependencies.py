@@ -148,6 +148,22 @@ def main():
     print("-" * 40)
     mgltools_available = check_mgltools()
     
+    # Check observability dependencies
+    print("\nObservability Dependencies:")
+    print("-" * 40)
+    try:
+        import structlog
+    except ImportError:
+        print("WARNING: structlog is not installed. Logging will not be structured.")
+    try:
+        import prometheus_client
+    except ImportError:
+        print("WARNING: prometheus_client is not installed. Metrics will not be available.")
+    try:
+        import sentry_sdk
+    except ImportError:
+        print("WARNING: sentry_sdk is not installed. Sentry monitoring will not be available.")
+    
     # Summary
     print("\n" + "=" * 60)
     print("SUMMARY")
